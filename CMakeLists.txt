@@ -5,7 +5,7 @@ project(rslidar_sdk)
 #=======================================
 # Compile setup (ORIGINAL, CATKIN, COLCON)
 #=======================================
-set(COMPILE_METHOD COLCON CACHE STRING "Compilation method")
+set(COMPILE_METHOD CATKIN CACHE STRING "Compilation method")
 
 #=======================================
 # Custom Point Type (XYZI, XYZIRT)
