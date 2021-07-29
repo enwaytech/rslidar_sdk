@@ -181,6 +181,23 @@ endif(NOT PROTOC MATCHES "NOTFOUND" AND Protobuf_FOUND)
 if(roscpp_FOUND)
   target_link_libraries(rslidar_sdk_node ${roscpp_LIBRARIES})
   target_link_libraries(rslidar_sdk_nodelet ${roscpp_LIBRARIES})
+
+  install(FILES
+    nodelets.xml
+    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+    )
+  install(DIRECTORY
+    launch
+    rviz
+    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+    )
+  install(TARGETS
+    rslidar_sdk_nodelet
+    rslidar_sdk_node
+    ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+    )
 endif(roscpp_FOUND)
 #Ros2#
 if(rclcpp_FOUND AND ${COMPILE_METHOD} STREQUAL "COLCON")
