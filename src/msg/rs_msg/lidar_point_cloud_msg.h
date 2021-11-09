@@ -45,12 +45,27 @@ struct RsPointXYZIRT
 } EIGEN_ALIGN16;
 POINT_CLOUD_REGISTER_POINT_STRUCT(RsPointXYZIRT, (float, x, x)(float, y, y)(float, z, z)(uint8_t, intensity, intensity)(
                                                      uint16_t, ring, ring)(double, timestamp, timestamp))
+struct RsPointXYZRPYI
+{
+  PCL_ADD_POINT4D;
+  float range = 0;
+  float pitch = 0;
+  float yaw = 0;
+  uint8_t intensity;
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+} EIGEN_ALIGN16;
+POINT_CLOUD_REGISTER_POINT_STRUCT(RsPointXYZRPYI, (float, x, x)(float, y, y)(float, z, z)(float, range, range)(float, pitch, pitch)(
+                                                   float, yaw, yaw)(uint8_t, intensity, intensity))
+
+
 #ifdef POINT_TYPE_XYZI
 typedef pcl::PointXYZI PointT;
 #elif POINT_TYPE_XYZIRT
-
 typedef RsPointXYZIRT PointT;
+#elif POINT_TYPE_XYZRPYI
+typedef RsPointXYZRPYI PointT;
 #endif
+
 
 namespace robosense
 {
