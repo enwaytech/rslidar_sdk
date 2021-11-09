@@ -77,6 +77,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "adapter/packet_protobuf_adapter.hpp"
 #include "adapter/point_cloud_protobuf_adapter.hpp"
 #include "adapter/camera_trigger_adapter.hpp"
+#include "lidar_self_filter/self_filter_setup.h"
 
 namespace robosense
 {

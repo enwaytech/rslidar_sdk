@@ -15,6 +15,9 @@
   <depend>sensor_msgs</depend>
   <depend>nodelet</depend>
   <depend>pluginlib</depend>
+  <depend>lidar_self_filter</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
   <export>
     <nodelet plugin="${prefix}/nodelets.xml"/>
   </export>
