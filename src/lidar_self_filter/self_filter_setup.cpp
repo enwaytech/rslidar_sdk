@@ -26,8 +26,8 @@ robosense::lidar::SelfFilterSetup::SelfFilterSetup(ros::NodeHandle& node_handle,
                                                 lidar_self_filter::LidarSettings lidar_settings,
                                                 std::string sensor_frame,
                                                 std::string save_file_path)
-  //: robot_params_ {}
-  : lidar_settings_ {std::move(lidar_settings)}
+  : robot_params_ {}
+  , lidar_settings_ {std::move(lidar_settings)}
   , lidar_self_filter_ {node_handle, lidar_settings_, save_file_path}
   , sensor_frame_ {std::move(sensor_frame)}
   , transform_listener_ {transform_buffer_}
@@ -55,12 +55,14 @@ robosense::lidar::SelfFilterSetup::filter(const LidarPointCloudMsg& msg)
 
   for (const auto& point : *(msg.point_cloud_ptr))
   {
-    if (std::isnan(point.range) || std::isnan(point.yaw) || std::isnan(point.pitch))
+    if (std::isnan(point.range) || std::isnan(point.yaw) || std::isnan(point.pitch) || std::isnan(point.x) || std::isnan(point.y) || std::isnan(point.z))
     {
       continue;
     }
-
-    lidar_self_filter_.insertReading(static_cast<double>(point.yaw), static_cast<double>(point.pitch), point.range);
+    if (inBufferedFootprint(point))
+    {
+      lidar_self_filter_.insertReading(static_cast<double>(point.yaw), static_cast<double>(point.pitch), point.range);
+    }
   }
 
   #if 0
@@ -130,17 +132,15 @@ robosense::lidar::SelfFilterSetup::filter(const LidarPointCloudMsg& msg)
     pub_.publish(visualization_points_);
   }
 }
-#if 0
+#if 1
 bool
-robosense::lidar::SelfFilterSetup::inBufferedFootprint(const waymo::Return& laser_return)
+robosense::lidar::SelfFilterSetup::inBufferedFootprint(const PointT& point)
 {
-
-  const waymo::Vec3d cartesian_coordinates {laser_return.GetCoordinates()};
   geometry_msgs::PointStamped sensor_point;
   sensor_point.header.frame_id = sensor_frame_;
-  sensor_point.point.x = cartesian_coordinates.x;
-  sensor_point.point.y = cartesian_coordinates.y;
-  sensor_point.point.z = cartesian_coordinates.z;
+  sensor_point.point.x = point.x;
+  sensor_point.point.y = point.y;
+  sensor_point.point.z = point.z;
 
   geometry_msgs::PointStamped transformed_point;
   try

@@ -1,5 +1,5 @@
 common:
-  msg_source: 1                                         #0: not use Lidar
+  msg_source: 2                                         #0: not use Lidar
                                                         #1: packet message comes from online Lidar
                                                         #2: packet message comes from ROS or ROS2
                                                         #3: packet message comes from Pcap file
@@ -14,7 +14,7 @@ common:
 lidar:
   - driver:
       lidar_type: RSBP             #LiDAR type - RS16, RS32, RSBP, RS128, RS80, RSM1, RSHELIOS
-      frame_id: /lidar_front_right #Frame id of message
+      frame_id: lidar_front_right #Frame id of message
       msop_port: 6697              #Msop port of lidar
       difop_port: 7786             #Difop port of lidar
       start_angle: 0               #Start angle of point cloud
@@ -23,6 +23,8 @@ lidar:
       max_distance: 200            #Maximum distance of point cloud
       use_lidar_clock: false       #True--Use the lidar clock as the message timestamp
                                    #False-- Use the system clock as the timestamp  
+      self_filter_setup: true
+      self_filter_enabled: false
     ros:
       ros_recv_packet_topic: /rslidar_packets          #Topic used to receive lidar packets from ROS
       ros_send_packet_topic: /rslidar_packets          #Topic used to send lidar packets through ROS

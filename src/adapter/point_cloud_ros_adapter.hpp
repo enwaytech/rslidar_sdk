@@ -39,6 +39,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <optional>
 #include "lidar_self_filter/self_filter_setup.h"
 #include "lidar_self_filter/filter.h"
+#include <pcl/filters/extract_indices.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
@@ -62,10 +63,10 @@ private:
   ros::Publisher point_cloud_pub_;
   std::optional<SelfFilterSetup> self_filter_setup_;
   std::optional<lidar_self_filter::Filter> self_filter_;
-  bool self_filter_activated_;
-  bool self_filter_setup_activ_;
+  bool self_filter_setup_active_;
+  bool self_filter_enabled_;
   tf2_ros::Buffer transform_buffer_;
-  std::optional<tf2_ros::TransformListener> transform_listener_;
+  tf2_ros::TransformListener transform_listener_{transform_buffer_};
   std::string frame_id_;
 };
 
@@ -75,19 +76,25 @@ PointCloudRosAdapter::lookupTransformToBaseLink() const
   constexpr std::string_view k_base_link_frame {"base_link"};
   try
   {
-    return transform_buffer_.lookupTransform("base_link", frame_id_, ros::Time(0.0));
+    return transform_buffer_.lookupTransform(static_cast<std::string>(k_base_link_frame), frame_id_, ros::Time(1.0));
   }
   catch (tf2::TransformException& ex)
   {
     ROS_WARN_STREAM("Failed transform of point from sensor frame " << frame_id_ << " to base_link: " << ex.what()
                                                                    << ". Self-filtering will not be possible");
-    return std::nullopt;
+    geometry_msgs::TransformStamped test;
+    test.child_frame_id = frame_id_;
+    test.header.frame_id = "base_link";
+    test.transform.translation.x = 0.0;
+    test.transform.translation.z = 0.0;
+    test.transform.rotation.w = 1.0;
+    return test; //std::nullopt;
   }
 }
 
 inline void PointCloudRosAdapter::init(const YAML::Node& config)
 {
-  tf2_ros::TransformListener transform_listener(transform_buffer_);
+  //tf2_ros::TransformListener transform_listener(transform_buffer_);
   //transform_listener_.emplace(transform_listener);
 
   bool send_point_cloud_ros;
@@ -102,8 +109,7 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config)
   }
 
   const lidar_self_filter::LidarSettings self_filter_lidar_settings = makeSelfFilterSettings(config);
-  //YAML::Node lidar_config = yamlSubNodeAbort(config, "lidar");
-  //YAML::Node driver_config = yamlSubNodeAbort(lidar_config, "driver");
+
   std::string frame_id;
   yamlRead<std::string>(config["driver"], "frame_id", frame_id, "rslidar");
   RS_WARNING << "Frame ID: " << frame_id << RS_REND;
@@ -112,17 +118,19 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config)
 
 
   bool self_filter_setup;
-  yamlRead<bool>(config, "self_filter_setup", self_filter_setup, true);
-  self_filter_setup_activ_ = self_filter_setup;
+  yamlRead<bool>(config["driver"], "self_filter_setup", self_filter_setup, false);
+  self_filter_setup_active_ = self_filter_setup;
   if (self_filter_setup)
   {
+    RS_WARNING << "SELF FILTER SETUP ENABLED" << RS_REND;
     ros::NodeHandle filter_handle {"~/lidar_self_filter"};
     self_filter_setup_.emplace(filter_handle, self_filter_lidar_settings, frame_id, filter_file_path);
   }
 
-  yamlRead<bool>(config, "self_filter_activated", self_filter_activated_, false);
-  if (self_filter_activated_ && !self_filter_setup)
+  yamlRead<bool>(config["driver"], "self_filter_enabled", self_filter_enabled_, false);
+  if (self_filter_enabled_ && !self_filter_setup)
   {
+  RS_WARNING << "SELF FILTER ENABLED" << RS_REND;
     const lidar_self_filter::Filter self_filter {
         filter_file_path, self_filter_lidar_settings, lookupTransformToBaseLink()};
     self_filter_.emplace(self_filter);
@@ -133,19 +141,90 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 {
   RS_WARNING << "PointCloudRosAdapter: Point Cloud size: " << msg.point_cloud_ptr->size() << RS_REND;
 
-  if (self_filter_setup_activ_)
+  if (self_filter_setup_active_)
   {
     RS_WARNING << frame_id_ << ": SELF FILTER SETUP ACTIVE" << RS_REND;
     self_filter_setup_->filter(msg);
   }
-
-  if (self_filter_activated_)
+  std::vector<float> pitch;
+  if (self_filter_enabled_)
   {
+    RS_WARNING << "Self Filter activated" << RS_REND;
+    unsigned int number_of_filtered_points {0};
+
+    pcl::PointCloud<PointT>::Ptr filtered_cloud(new pcl::PointCloud<PointT>);
+    float old_yaw {0.0F};
+    float old_pitch {0.0F};
+    for (size_t idx = 0; idx < msg.point_cloud_ptr->size(); ++idx)
     {
+      const PointT& point {msg.point_cloud_ptr->points[idx]};
+      if (std::isnan(point.x)
+          || std::isnan(point.y)
+          || std::isnan(point.z)
+          || std::isnan(point.yaw)
+          || std::isnan(point.pitch)
+          || std::isnan(point.range))
+      {
+        continue;
+      }
+#ifdef DEBUG
+      if (point.pitch != old_pitch)
+      { 
+          old_pitch = point.pitch;
+          pitch.push_back(point.pitch);
+          //RS_WARNING << "Pitch: " << point.pitch << RS_REND;
+      }
+      if (point.yaw != old_yaw)
+      { 
+          old_yaw = point.yaw;
+          RS_WARNING << " Yaw: " << point.yaw << RS_REND;
+      }
+#endif
+      if (!self_filter_->isSelfPoint(point.yaw,
+                                     point.pitch,
+                                     point.range,
+                                     point.x,
+                                     point.y,
+                                     point.z))
+      {
+        filtered_cloud->push_back(point);
+      }
+      else
+      {
+        number_of_filtered_points++;
+      }
+    }
+#ifdef DEBUG
+    std::sort(pitch.begin(), pitch.end());
+    auto last = std::unique(pitch.begin(), pitch.end());
+    pitch.erase(last, pitch.end());
+    float last_pitch {0.0F};
+    std::vector<float> diffs;
+    for (auto p : pitch)
+    {
+      RS_WARNING << "Pitch: " << std::setprecision(10) << p << " diff: " << p - last_pitch << RS_REND;
+      last_pitch = p;
+      diffs.push_back(p - last_pitch);
+    }
+    float sum = std::accumulate(diffs.begin()+1, diffs.end(), 0.0);
+    float average_diff = sum / (diffs.size() - 1);
+    RS_WARNING << "Average Diff: " << average_diff << RS_REND;
+#endif
+    filtered_cloud->header = msg.point_cloud_ptr->header;
+    RS_WARNING << "Filtered cloud: " << filtered_cloud->points.size() << RS_REND;
+
+    LidarPointCloudMsg filtered_msg{filtered_cloud};
+    filtered_msg.timestamp = msg.timestamp;
+    filtered_msg.seq = msg.seq;
+    filtered_msg.frame_id = msg.frame_id;
+
+    RS_WARNING << frame_id_ << ": Filtered points: " << number_of_filtered_points << RS_REND;
+    RS_WARNING << "Output cloud" << filtered_msg.point_cloud_ptr->size() << RS_REND;
+    point_cloud_pub_.publish(toRosMsg(filtered_msg));
     // TODO: Check each point if self filter point
     // Assemble / remove point from pointcloud
     // publish self filtered point cloud
-    }
+    return;
   }
   point_cloud_pub_.publish(toRosMsg(msg));
 }
@@ -153,11 +232,10 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 inline lidar_self_filter::LidarSettings
 PointCloudRosAdapter::makeSelfFilterSettings(const YAML::Node& config) const
 {
-
-  //YAML::Node lidar_config = yamlSubNodeAbort(config, "lidar3");
-  //YAML::Node driver_config = yamlSubNodeAbort(lidar_config, "driver");
   std::string frame_id {"rslidar"};
   yamlRead<std::string>(config["driver"], "frame_id", frame_id, "rslidar");
+
+  RS_WARNING << "makeSelfFilterSettings: " << frame_id << RS_REND;
 
   lidar_self_filter::LidarSettings settings;
   settings.serial = frame_id;
@@ -165,7 +243,7 @@ PointCloudRosAdapter::makeSelfFilterSettings(const YAML::Node& config) const
 
   //constexpr double deg_resolution_per_hz = 0.24; // Honeycomb Laser Bear 1 specific
   //const double scans_in_fov = config_->fieldOfViewDeg() / (config_->spinFrequency() * deg_resolution_per_hz);
-  settings.yaw_resolution = 1.00;//config_->fieldOfViewDeg() / scans_in_fov;
+  settings.yaw_resolution = 0.01;
 
   //constexpr double half = 0.5;
 
@@ -174,7 +252,7 @@ PointCloudRosAdapter::makeSelfFilterSettings(const YAML::Node& config) const
 
   // fixing pitch resolution 0.5x highest resolution to cope with all pitch tables
   //constexpr double min_pitch_resolution {0.75};
-  settings.pitch_resolution = 1.00;//min_pitch_resolution;
+  settings.pitch_resolution = 2.81;//min_pitch_resolution;
 
   // The alignment of the pitch angles to the spacing in the filter should be kept
   // so we do padding with a multiple of the resolution
@@ -182,8 +260,8 @@ PointCloudRosAdapter::makeSelfFilterSettings(const YAML::Node& config) const
   //const double pitch_padding_size = std::ceil(max_pitch_deviation_degree / settings.pitch_resolution);
   //const double padding = pitch_padding_size * settings.pitch_resolution;
 
-  settings.min_pitch = 0.0;  //config_->pitchTable().back() - padding;
-  settings.max_pitch = 90.0; //config_->pitchTable().front() + padding;
+  settings.min_pitch = 2.31;  //config_->pitchTable().back() - padding;
+  settings.max_pitch = 89.5; //config_->pitchTable().front() + padding;
 
   return settings;
 }

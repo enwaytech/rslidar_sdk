@@ -14,7 +14,7 @@
 
 #include "msg/ros_msg_translator.h"
 
-/*#include <safety_utils/utils_params.h>*/
+#include <safety_utils/utils_params.h>
 
 #include <geometry_msgs/PoseArray.h>
 #include <tf2_ros/buffer.h>
@@ -43,12 +43,12 @@ namespace robosense
       void filter(const LidarPointCloudMsg& msg);
 
     private:
-      //[[nodiscard]] bool inBufferedFootprint(const waymo::Return& laser_return);
+      [[nodiscard]] bool inBufferedFootprint(const PointT& laser_return);
 
       constexpr static double k_footprint_buffer_width_ = 0.05;
       constexpr static double k_min_z_ = 0.05;
 
-      //const safety_utils::UtilsParams robot_params_;
+      const safety_utils::UtilsParams robot_params_;
       const lidar_self_filter::LidarSettings lidar_settings_;
 
       lidar_self_filter::LidarSelfFilterSetup lidar_self_filter_;
