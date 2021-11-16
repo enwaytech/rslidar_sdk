@@ -123,7 +123,7 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config)
 
 
   bool self_filter_setup;
-  yamlRead<bool>(config["driver"], "self_filter_setup", self_filter_setup, false);
+  yamlRead<bool>(config["self_filter"], "self_filter_setup", self_filter_setup, false);
   self_filter_setup_active_ = self_filter_setup;
   if (self_filter_setup)
   {
@@ -132,7 +132,7 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config)
     self_filter_setup_.emplace(filter_handle, self_filter_lidar_settings, frame_id, filter_file_path);
   }
 
-  yamlRead<bool>(config["driver"], "self_filter_enabled", self_filter_enabled_, false);
+  yamlRead<bool>(config["self_filter"], "self_filter_enabled", self_filter_enabled_, false);
   if (self_filter_enabled_ && !self_filter_setup)
   {
   RS_WARNING << "SELF FILTER ENABLED" << RS_REND;
@@ -254,16 +254,38 @@ PointCloudRosAdapter::makeSelfFilterSettings(const YAML::Node& config) const
 
   //constexpr double deg_resolution_per_hz = 0.24; // Honeycomb Laser Bear 1 specific
   //const double scans_in_fov = config_->fieldOfViewDeg() / (config_->spinFrequency() * deg_resolution_per_hz);
-  settings.yaw_resolution = 0.01;
+  double yaw_resolution;
+  yamlRead<double>(config["self_filter"], "yaw_resolution", yaw_resolution, 0.01);
+  settings.yaw_resolution = yaw_resolution;
+
+  double min_yaw;
+  yamlRead<double>(config["self_filter"], "min_yaw", min_yaw, 0.0);
+  settings.min_yaw = min_yaw;
+
+  double max_yaw;
+  yamlRead<double>(config["self_filter"], "max_yaw", max_yaw, 360.0);
+  settings.max_yaw = max_yaw;
+
+  double pitch_resolution;
+  yamlRead<double>(config["self_filter"], "pitch_resoltuin", pitch_resolution, 2.81);
+  settings.pitch_resolution = pitch_resolution;
+
+  double min_pitch;
+  yamlRead<double>(config["self_filter"], "min_pitch", min_pitch, 2.31);
+  settings.min_pitch = min_pitch;
+
+  double max_pitch;
+  yamlRead<double>(config["self_filter"], "max_pitch", max_pitch, 89.5);
+  settings.max_pitch = max_pitch;
 
   //constexpr double half = 0.5;
 
-  settings.min_yaw = 0.0; //config_->fieldOfViewDirectionDeg() - (half * config_->fieldOfViewDeg());
-  settings.max_yaw = 360.0; //config_->fieldOfViewDirectionDeg() + (half * config_->fieldOfViewDeg());
+  //settings.min_yaw = 0.0; //config_->fieldOfViewDirectionDeg() - (half * config_->fieldOfViewDeg());
+  //settings.max_yaw = 360.0; //config_->fieldOfViewDirectionDeg() + (half * config_->fieldOfViewDeg());
 
   // fixing pitch resolution 0.5x highest resolution to cope with all pitch tables
   //constexpr double min_pitch_resolution {0.75};
-  settings.pitch_resolution = 2.81;//min_pitch_resolution;
+  //settings.pitch_resolution = 2.81;//min_pitch_resolution;
 
   // The alignment of the pitch angles to the spacing in the filter should be kept
   // so we do padding with a multiple of the resolution
@@ -271,8 +293,8 @@ PointCloudRosAdapter::makeSelfFilterSettings(const YAML::Node& config) const
   //const double pitch_padding_size = std::ceil(max_pitch_deviation_degree / settings.pitch_resolution);
   //const double padding = pitch_padding_size * settings.pitch_resolution;
 
-  settings.min_pitch = 2.31;  //config_->pitchTable().back() - padding;
-  settings.max_pitch = 89.5; //config_->pitchTable().front() + padding;
+  //settings.min_pitch = 2.31;  //config_->pitchTable().back() - padding;
+  //settings.max_pitch = 89.5; //config_->pitchTable().front() + padding;
 
   return settings;
 }
