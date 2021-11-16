@@ -39,7 +39,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <optional>
 #include "lidar_self_filter/self_filter_setup.h"
 #include "lidar_self_filter/filter.h"
+
 #include <pcl/filters/extract_indices.h>
+#include <pcl/common/io.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <mutex>
@@ -158,13 +160,12 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
   std::vector<float> pitch;
   if (self_filter_enabled_)
   {
-    mtx_.lock();
-    //RS_WARNING << "Self Filter activated" << RS_REND;
+
     unsigned int number_of_filtered_points {0};
 
+    pcl::PointIndices indices;
     pcl::PointCloud<PointT>::Ptr filtered_cloud(new pcl::PointCloud<PointT>);
-    float old_yaw {0.0F};
-    float old_pitch {0.0F};
+    mtx_.lock();
     for (size_t idx = 0; idx < msg.point_cloud_ptr->points.size(); ++idx)
     {
       const PointT& point {msg.point_cloud_ptr->points[idx]};
@@ -177,19 +178,6 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
       {
         continue;
       }
-#ifdef DEBUG
-      if (point.pitch != old_pitch)
-      { 
-          old_pitch = point.pitch;
-          pitch.push_back(point.pitch);
-          //RS_WARNING << "Pitch: " << point.pitch << RS_REND;
-      }
-      if (point.yaw != old_yaw)
-      { 
-          old_yaw = point.yaw;
-          RS_WARNING << " Yaw: " << point.yaw << RS_REND;
-      }
-#endif
       if (!self_filter_->isSelfPoint(point.yaw,
                                      point.pitch,
                                      point.range,
@@ -197,7 +185,7 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
                                      point.y,
                                      point.z))
       {
-        filtered_cloud->push_back(point);
+        indices.indices.emplace_back(idx);
       }
       else
       {
@@ -205,36 +193,22 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
       }
     }
 
-#ifdef DEBUG
-    std::sort(pitch.begin(), pitch.end());
-    auto last = std::unique(pitch.begin(), pitch.end());
-    pitch.erase(last, pitch.end());
-    float last_pitch {0.0F};
-    std::vector<float> diffs;
-    for (auto p : pitch)
-    {
-      RS_WARNING << "Pitch: " << std::setprecision(10) << p << " diff: " << p - last_pitch << RS_REND;
-      last_pitch = p;
-      diffs.push_back(p - last_pitch);
-    }
-    float sum = std::accumulate(diffs.begin()+1, diffs.end(), 0.0);
-    float average_diff = sum / (diffs.size() - 1);
-    RS_WARNING << "Average Diff: " << average_diff << RS_REND;
-#endif
     filtered_cloud->header = msg.point_cloud_ptr->header;
-    //RS_WARNING << "Filtered cloud: " << filtered_cloud->points.size() << RS_REND;
 
     LidarPointCloudMsg filtered_msg{filtered_cloud};
     filtered_msg.timestamp = msg.timestamp;
     filtered_msg.seq = msg.seq;
     filtered_msg.frame_id = msg.frame_id;
     mtx_.unlock();
-    //RS_WARNING << frame_id_ << ": Filtered points: " << number_of_filtered_points << RS_REND;
-    //RS_WARNING << "Output cloud" << filtered_msg.point_cloud_ptr->size() << RS_REND;
-    point_cloud_pub_.publish(toRosMsg(filtered_msg));
-    // TODO: Check each point if self filter point
-    // Assemble / remove point from pointcloud
-    // publish self filtered point cloud
+
+    pcl::copyPointCloud(*(msg.point_cloud_ptr), indices.indices, *filtered_cloud);
+
+    //pcl::ExtractIndices<pcl::PointXYZ> extract_filter;
+    //sensor_msgs::PointCloud2 filtered_cloud;
+    //sensor_msgs::PointCloud2Ptr filtered_cloud(new sensor_msgs::PointCloud2<PointT>);
+    //extract_filter.filter(point_cloud, indices, filtered_cloud);
+    point_cloud_pub_.publish(toRosMsg(filtered_cloud));
+
     return;
   }
   point_cloud_pub_.publish(toRosMsg(msg));
