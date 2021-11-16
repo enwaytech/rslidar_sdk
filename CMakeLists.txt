@@ -91,7 +91,7 @@ else(NOT PROTOC MATCHES "NOTFOUND" AND Protobuf_FOUND)
 endif(NOT PROTOC MATCHES "NOTFOUND" AND Protobuf_FOUND)
 #Others#
 find_package(yaml-cpp REQUIRED)
-find_package(PCL QUIET REQUIRED)
+find_package(PCL REQUIRED)
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
@@ -106,16 +106,17 @@ if(${COMPILE_METHOD} STREQUAL "CATKIN")
       lidar_self_filter
       tf2
       tf2_ros
+      pcl_conversions
     )
 
-  find_package(catkin REQUIRED 
+  find_package(catkin REQUIRED
     COMPONENTS
       ${PROJECT_CATKIN_DEPS})
 
   catkin_package(
     LIBRARIES
       ${PROJECT_NAME}
-    CATKIN_DEPENDS 
+    CATKIN_DEPENDS
       ${PROJECT_CATKIN_DEPS}
   )
   include_directories(
@@ -208,8 +209,9 @@ else(NOT PROTOC MATCHES "NOTFOUND" AND Protobuf_FOUND)
 endif(NOT PROTOC MATCHES "NOTFOUND" AND Protobuf_FOUND)
 #Ros#
 if(roscpp_FOUND)
-  target_link_libraries(rslidar_sdk_node ${roscpp_LIBRARIES} ${catkin_LIBRARIES})
-  target_link_libraries(rslidar_sdk_nodelet ${roscpp_LIBRARIES} ${catkin_LIBRARIES})
+  message(${PCL_LIBRARIES})
+  target_link_libraries(rslidar_sdk_node ${roscpp_LIBRARIES} ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+  target_link_libraries(rslidar_sdk_nodelet ${roscpp_LIBRARIES} ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
   install(FILES
     nodelets.xml

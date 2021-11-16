@@ -42,7 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <pcl/filters/extract_indices.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
-
+#include <mutex>
 namespace robosense
 {
 namespace lidar
@@ -68,27 +68,32 @@ private:
   tf2_ros::Buffer transform_buffer_;
   tf2_ros::TransformListener transform_listener_{transform_buffer_};
   std::string frame_id_;
+  std::mutex mtx_;
 };
 
 inline std::optional<geometry_msgs::TransformStamped>
 PointCloudRosAdapter::lookupTransformToBaseLink() const
 {
   constexpr std::string_view k_base_link_frame {"base_link"};
+
+  // TODO: useCantransform and wait until transformation is available!
   try
   {
-    return transform_buffer_.lookupTransform(static_cast<std::string>(k_base_link_frame), frame_id_, ros::Time(1.0));
+    return transform_buffer_.lookupTransform(static_cast<std::string>(k_base_link_frame), frame_id_, ros::Time(10.0));
   }
   catch (tf2::TransformException& ex)
   {
     ROS_WARN_STREAM("Failed transform of point from sensor frame " << frame_id_ << " to base_link: " << ex.what()
                                                                    << ". Self-filtering will not be possible");
+#ifdef DEBUG
     geometry_msgs::TransformStamped test;
     test.child_frame_id = frame_id_;
     test.header.frame_id = "base_link";
     test.transform.translation.x = 0.0;
     test.transform.translation.z = 0.0;
     test.transform.rotation.w = 1.0;
-    return test; //std::nullopt;
+#endif
+    return std::nullopt;
   }
 }
 
@@ -143,19 +148,24 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 
   if (self_filter_setup_active_)
   {
-    RS_WARNING << frame_id_ << ": SELF FILTER SETUP ACTIVE" << RS_REND;
+    // Add lock?
+    //RS_WARNING << frame_id_ << ": SELF FILTER SETUP ACTIVE" << RS_REND;
+    mtx_.lock();
     self_filter_setup_->filter(msg);
+    mtx_.unlock();
   }
+  
   std::vector<float> pitch;
   if (self_filter_enabled_)
   {
-    RS_WARNING << "Self Filter activated" << RS_REND;
+    mtx_.lock();
+    //RS_WARNING << "Self Filter activated" << RS_REND;
     unsigned int number_of_filtered_points {0};
 
     pcl::PointCloud<PointT>::Ptr filtered_cloud(new pcl::PointCloud<PointT>);
     float old_yaw {0.0F};
     float old_pitch {0.0F};
-    for (size_t idx = 0; idx < msg.point_cloud_ptr->size(); ++idx)
+    for (size_t idx = 0; idx < msg.point_cloud_ptr->points.size(); ++idx)
     {
       const PointT& point {msg.point_cloud_ptr->points[idx]};
       if (std::isnan(point.x)
@@ -194,6 +204,7 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
         number_of_filtered_points++;
       }
     }
+
 #ifdef DEBUG
     std::sort(pitch.begin(), pitch.end());
     auto last = std::unique(pitch.begin(), pitch.end());
@@ -211,15 +222,15 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
     RS_WARNING << "Average Diff: " << average_diff << RS_REND;
 #endif
     filtered_cloud->header = msg.point_cloud_ptr->header;
-    RS_WARNING << "Filtered cloud: " << filtered_cloud->points.size() << RS_REND;
+    //RS_WARNING << "Filtered cloud: " << filtered_cloud->points.size() << RS_REND;
 
     LidarPointCloudMsg filtered_msg{filtered_cloud};
     filtered_msg.timestamp = msg.timestamp;
     filtered_msg.seq = msg.seq;
     filtered_msg.frame_id = msg.frame_id;
-
-    RS_WARNING << frame_id_ << ": Filtered points: " << number_of_filtered_points << RS_REND;
-    RS_WARNING << "Output cloud" << filtered_msg.point_cloud_ptr->size() << RS_REND;
+    mtx_.unlock();
+    //RS_WARNING << frame_id_ << ": Filtered points: " << number_of_filtered_points << RS_REND;
+    //RS_WARNING << "Output cloud" << filtered_msg.point_cloud_ptr->size() << RS_REND;
     point_cloud_pub_.publish(toRosMsg(filtered_msg));
     // TODO: Check each point if self filter point
     // Assemble / remove point from pointcloud

@@ -53,12 +53,13 @@ robosense::lidar::SelfFilterSetup::filter(const LidarPointCloudMsg& msg)
     return;
   }
 
-  for (const auto& point : *(msg.point_cloud_ptr))
+  for (const auto point : msg.point_cloud_ptr->points)
   {
     if (std::isnan(point.range) || std::isnan(point.yaw) || std::isnan(point.pitch) || std::isnan(point.x) || std::isnan(point.y) || std::isnan(point.z))
     {
       continue;
     }
+
     if (inBufferedFootprint(point))
     {
       lidar_self_filter_.insertReading(static_cast<double>(point.yaw), static_cast<double>(point.pitch), point.range);
@@ -126,7 +127,8 @@ robosense::lidar::SelfFilterSetup::filter(const LidarPointCloudMsg& msg)
     lidar_self_filter_.insertReading(yaw_degrees, pitch_degrees, static_cast<float>(min_range));
   }
 #endif
-  if (pub_.getNumSubscribers() > 0)
+
+  if (pub_.getNumSubscribers() > 0 && visualization_points_.points.size() > 0)
   {
     visualization_points_.header.stamp = ros::Time::now();
     pub_.publish(visualization_points_);
@@ -136,6 +138,7 @@ robosense::lidar::SelfFilterSetup::filter(const LidarPointCloudMsg& msg)
 bool
 robosense::lidar::SelfFilterSetup::inBufferedFootprint(const PointT& point)
 {
+
   geometry_msgs::PointStamped sensor_point;
   sensor_point.header.frame_id = sensor_frame_;
   sensor_point.point.x = point.x;
@@ -145,10 +148,11 @@ robosense::lidar::SelfFilterSetup::inBufferedFootprint(const PointT& point)
   geometry_msgs::PointStamped transformed_point;
   try
   {
-    transform_buffer_.transform(sensor_point, transformed_point, static_cast<std::string>(k_base_link_frame));
+    transformed_point = transform_buffer_.transform(sensor_point, static_cast<std::string>(k_base_link_frame));
   }
   catch (tf2::TransformException& ex)
   {
+
     const std::string warning {"Failed transform of point from sensor frame " + sensor_frame_ + " to "
                                + static_cast<std::string>(k_base_link_frame) + ": " + ex.what()};
     constexpr double throttle_secs = 5.0;
@@ -160,7 +164,7 @@ robosense::lidar::SelfFilterSetup::inBufferedFootprint(const PointT& point)
   const double min_x = robot_params_.baseLinkBackOffset() - k_footprint_buffer_width_;
   const double max_y = (robot_params_.footprintWidth() * 0.5) + k_footprint_buffer_width_;
 
-  const geometry_msgs::Point& base_link_point = transformed_point.point;
+  const geometry_msgs::Point base_link_point = transformed_point.point;
 
   if (base_link_point.z >= k_min_z_ && base_link_point.x >= min_x && base_link_point.x <= max_x
       && std::abs(base_link_point.y) <= max_y)
