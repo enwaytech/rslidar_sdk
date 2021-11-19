@@ -20,6 +20,11 @@ set(COMPILE_METHOD CATKIN CACHE STRING "Compilation method")
 #=======================================
 set(POINT_TYPE XYZRPYI)
 
+#=======================================
+# Custom Point Type with Range, Pitch, Yaw, NUM_RETURN
+#=======================================
+set(POINT_TYPE XYZRPYIN)
+
 #========================
 # Project details / setup
 #========================
@@ -141,6 +146,8 @@ elseif(${POINT_TYPE} STREQUAL "XYZIRT")
 add_definitions(-DPOINT_TYPE_XYZIRT)
 elseif(${POINT_TYPE} STREQUAL "XYZRPYI")
 add_definitions(-DPOINT_TYPE_XYZRPYI)
+elseif(${POINT_TYPE} STREQUAL "XYZRPYIN")
+add_definitions(-DPOINT_TYPE_XYZRPYIN)
 
 endif()
 message(=============================================================)

@@ -66,7 +66,7 @@ void CloudNodelet::onInit()
         RS_ERROR << "Config file format wrong! Please check the format(e.g. indentation) " << RS_REND;
         return;
     }
-    usleep(100000);
+    usleep(500000);
     adapter_ptr_.reset(new AdapterManager());
     adapter_ptr_->init(config);
     adapter_ptr_->start();

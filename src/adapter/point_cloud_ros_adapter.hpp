@@ -146,12 +146,8 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config)
 
 inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 {
-  RS_WARNING << "PointCloudRosAdapter: Point Cloud size: " << msg.point_cloud_ptr->size() << RS_REND;
-
   if (self_filter_setup_active_)
   {
-    // Add lock?
-    //RS_WARNING << frame_id_ << ": SELF FILTER SETUP ACTIVE" << RS_REND;
     mtx_.lock();
     self_filter_setup_->filter(msg);
     mtx_.unlock();
@@ -161,10 +157,9 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
   if (self_filter_enabled_)
   {
 
-    unsigned int number_of_filtered_points {0};
-
     pcl::PointIndices indices;
     pcl::PointCloud<PointT>::Ptr filtered_cloud(new pcl::PointCloud<PointT>);
+    unsigned int number_of_filtered_points {0};
     mtx_.lock();
     for (size_t idx = 0; idx < msg.point_cloud_ptr->points.size(); ++idx)
     {
@@ -195,19 +190,14 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 
     filtered_cloud->header = msg.point_cloud_ptr->header;
 
+    pcl::copyPointCloud(*(msg.point_cloud_ptr), indices.indices, *filtered_cloud);
+    mtx_.unlock();
     LidarPointCloudMsg filtered_msg{filtered_cloud};
     filtered_msg.timestamp = msg.timestamp;
     filtered_msg.seq = msg.seq;
     filtered_msg.frame_id = msg.frame_id;
-    mtx_.unlock();
 
-    pcl::copyPointCloud(*(msg.point_cloud_ptr), indices.indices, *filtered_cloud);
-
-    //pcl::ExtractIndices<pcl::PointXYZ> extract_filter;
-    //sensor_msgs::PointCloud2 filtered_cloud;
-    //sensor_msgs::PointCloud2Ptr filtered_cloud(new sensor_msgs::PointCloud2<PointT>);
-    //extract_filter.filter(point_cloud, indices, filtered_cloud);
-    point_cloud_pub_.publish(toRosMsg(filtered_cloud));
+    point_cloud_pub_.publish(toRosMsg(filtered_msg));
 
     return;
   }
