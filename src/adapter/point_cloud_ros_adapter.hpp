@@ -79,14 +79,21 @@ PointCloudRosAdapter::lookupTransformToBaseLink() const
   constexpr std::string_view k_base_link_frame {"base_link"};
 
   // TODO: useCantransform and wait until transformation is available!
+  constexpr double transform_timeout {2.0};
+
   try
   {
-    return transform_buffer_.lookupTransform(static_cast<std::string>(k_base_link_frame), frame_id_, ros::Time(10.0));
+    if (transform_buffer_.canTransform(static_cast<std::string>(k_base_link_frame), frame_id_, ros::Time(0.0), ros::Duration(transform_timeout)))
+    {
+      return transform_buffer_.lookupTransform(static_cast<std::string>(k_base_link_frame), frame_id_, ros::Time(0.0));
+    }
+    ROS_WARN_STREAM("Failed transform of point from sensor frame " << frame_id_ << " to base_link: " << ". Self-filtering will not be possible");
+    return std::nullopt;
   }
   catch (tf2::TransformException& ex)
   {
     ROS_WARN_STREAM("Failed transform of point from sensor frame " << frame_id_ << " to base_link: " << ex.what()
-                                                                   << ". Self-filtering will not be possible");
+                                                                  << ". Self-filtering will not be possible");
 #ifdef DEBUG
     geometry_msgs::TransformStamped test;
     test.child_frame_id = frame_id_;
@@ -161,6 +168,7 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
     pcl::PointCloud<PointT>::Ptr filtered_cloud(new pcl::PointCloud<PointT>);
     unsigned int number_of_filtered_points {0};
     mtx_.lock();
+    auto start = std::chrono::system_clock::now();
     for (size_t idx = 0; idx < msg.point_cloud_ptr->points.size(); ++idx)
     {
       const PointT& point {msg.point_cloud_ptr->points[idx]};
@@ -187,6 +195,9 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
         number_of_filtered_points++;
       }
     }
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    RS_WARNING << "Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() << "ms" << RS_REND;
 
     filtered_cloud->header = msg.point_cloud_ptr->header;
 
