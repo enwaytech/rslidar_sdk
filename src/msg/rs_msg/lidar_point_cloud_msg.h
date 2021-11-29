@@ -57,18 +57,19 @@ struct RsPointXYZRPYI
 POINT_CLOUD_REGISTER_POINT_STRUCT(RsPointXYZRPYI, (float, x, x)(float, y, y)(float, z, z)(float, range, range)(float, pitch, pitch)(
                                                    float, yaw, yaw)(uint8_t, intensity, intensity))
 
-struct RsPointXYZRPYIN
+struct RsPointXYZRPYINR
 {
   PCL_ADD_POINT4D;
   float range = 0;
   float pitch = 0;
   float yaw = 0;
   uint8_t intensity;
-  uint8_t num_return;
+  uint8_t num_returns;
+  uint8_t return_index;
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 } EIGEN_ALIGN16;
-POINT_CLOUD_REGISTER_POINT_STRUCT(RsPointXYZRPYIN, (float, x, x)(float, y, y)(float, z, z)(float, range, range)(float, pitch, pitch)(
-                                                   float, yaw, yaw)(uint8_t, intensity, intensity)(uint8_t, num_return, num_return))
+POINT_CLOUD_REGISTER_POINT_STRUCT(RsPointXYZRPYINR, (float, x, x)(float, y, y)(float, z, z)(float, range, range)(float, pitch, pitch)(
+                                                   float, yaw, yaw)(uint8_t, intensity, intensity)(uint8_t, num_returns, num_returns)(uint8_t, return_index, return_index))
 
 #ifdef POINT_TYPE_XYZI
 typedef pcl::PointXYZI PointT;
@@ -76,8 +77,8 @@ typedef pcl::PointXYZI PointT;
 typedef RsPointXYZIRT PointT;
 #elif POINT_TYPE_XYZRPYI
 typedef RsPointXYZRPYI PointT;
-#elif POINT_TYPE_XYZRPYIN
-typedef RsPointXYZRPYIN PointT;
+#elif POINT_TYPE_XYZRPYINR
+typedef RsPointXYZRPYINR PointT;
 #endif
 
 
