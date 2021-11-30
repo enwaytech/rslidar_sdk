@@ -112,6 +112,8 @@ if(${COMPILE_METHOD} STREQUAL "CATKIN")
       tf2
       tf2_ros
       pcl_conversions
+      pcl_ros
+      dust_filter
     )
 
   find_package(catkin REQUIRED
@@ -119,6 +121,8 @@ if(${COMPILE_METHOD} STREQUAL "CATKIN")
       ${PROJECT_CATKIN_DEPS})
 
   catkin_package(
+    INCLUDE_DIRS
+      src
     LIBRARIES
       ${PROJECT_NAME}
     CATKIN_DEPENDS
@@ -216,7 +220,6 @@ else(NOT PROTOC MATCHES "NOTFOUND" AND Protobuf_FOUND)
 endif(NOT PROTOC MATCHES "NOTFOUND" AND Protobuf_FOUND)
 #Ros#
 if(roscpp_FOUND)
-  message(${PCL_LIBRARIES})
   target_link_libraries(rslidar_sdk_node ${roscpp_LIBRARIES} ${catkin_LIBRARIES} ${PCL_LIBRARIES})
   target_link_libraries(rslidar_sdk_nodelet ${roscpp_LIBRARIES} ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
@@ -251,3 +254,11 @@ if(rclcpp_FOUND AND ${COMPILE_METHOD} STREQUAL "COLCON")
   )
   ament_package()
 endif(rclcpp_FOUND AND ${COMPILE_METHOD} STREQUAL "COLCON")
+
+install(
+  DIRECTORY
+    src/
+  DESTINATION
+    ${CATKIN_GLOBAL_INCLUDE_DESTINATION}
+  FILES_MATCHING PATTERN "*.hpp"
+)

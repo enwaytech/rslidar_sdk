@@ -39,11 +39,15 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <optional>
 #include "lidar_self_filter/self_filter_setup.h"
 #include "lidar_self_filter/filter.h"
+#include "dust_filter/dust_filter.h"
 
 #include <pcl/filters/extract_indices.h>
 #include <pcl/common/io.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+
+#include "msg/rs_msg/lidar_point_cloud_msg.h"
+
 #include <mutex>
 namespace robosense
 {
@@ -71,6 +75,7 @@ private:
   tf2_ros::TransformListener transform_listener_{transform_buffer_};
   std::string frame_id_;
   std::mutex mtx_;
+  dust_filter::DustFilter<PointT> dust_filter_;
 };
 
 inline std::optional<geometry_msgs::TransformStamped>
@@ -108,9 +113,6 @@ PointCloudRosAdapter::lookupTransformToBaseLink() const
 
 inline void PointCloudRosAdapter::init(const YAML::Node& config)
 {
-  //tf2_ros::TransformListener transform_listener(transform_buffer_);
-  //transform_listener_.emplace(transform_listener);
-
   bool send_point_cloud_ros;
   std::string ros_send_topic;
   nh_ = std::unique_ptr<ros::NodeHandle>(new ros::NodeHandle());
@@ -203,7 +205,20 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 
     pcl::copyPointCloud(*(msg.point_cloud_ptr), indices.indices, *filtered_cloud);
     mtx_.unlock();
-    LidarPointCloudMsg filtered_msg{filtered_cloud};
+
+
+    RS_WARNING << "Dust filter: Start new point cloud" << RS_REND;
+    dust_filter_.startNewPointCloud(filtered_cloud->header, filtered_cloud->size());
+    for (const auto p : *filtered_cloud)
+    {
+      dust_filter_.addMeasurement(p);
+    }
+    pcl::PointCloud<PointT>::Ptr dust_filtered_cloud(new pcl::PointCloud<PointT>);
+    *dust_filtered_cloud = dust_filter_.getFilteredPointCloud();
+    RS_WARNING << "Dust filter done" << RS_REND;
+    RS_WARNING << "Cloud before dust filtering" << filtered_cloud->size() << " after: " << dust_filtered_cloud->size() << RS_REND;
+
+    LidarPointCloudMsg filtered_msg{dust_filtered_cloud};
     filtered_msg.timestamp = msg.timestamp;
     filtered_msg.seq = msg.seq;
     filtered_msg.frame_id = msg.frame_id;
