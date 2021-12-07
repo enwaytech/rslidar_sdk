@@ -99,6 +99,7 @@ if(${COMPILE_METHOD} STREQUAL "CATKIN")
       sensor_msgs
       tf2
       tf2_ros
+      dust_filter
   )
   find_package(catkin REQUIRED COMPONENTS
                roscpp

@@ -38,6 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <optional>
 #include "lidar_self_filter/self_filter_setup.h"
 #include "lidar_self_filter/filter.h"
+#include "dust_filter/dust_filter.h"
 namespace robosense
 {
 namespace lidar
@@ -67,6 +68,9 @@ private:
 
   tf2_ros::Buffer transform_buffer_;
   tf2_ros::TransformListener transform_listener_{transform_buffer_};
+
+  bool dust_filter_enabled_;
+  dust_filter::DustFilter<PointT> dust_filter_;
 };
 
 inline void PointCloudRosAdapter::init(const YAML::Node& config)
@@ -103,6 +107,8 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config)
         filter_file_path, self_filter_lidar_settings, lookupTransformToBaseLink()};
     self_filter_.emplace(self_filter);
   }
+
+  yamlRead<bool>(config["ros"], "dust_filter_enabled", dust_filter_enabled_, false);
 }
 
 inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
@@ -172,6 +178,19 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
     pcl::copyPointCloud(*cloud, indices.indices, *cloud);
     RS_WARNING << " after: " << cloud->points.size() << RS_REND;
   }
+
+  if (dust_filter_enabled_)
+  {
+    RS_WARNING << "Size before dust-filtering: " << cloud->points.size();
+    dust_filter_.startNewPointCloud(cloud->header, cloud->size());
+    for (const auto p : *cloud)
+    {
+      dust_filter_.addMeasurement(p);
+    }
+    *cloud = dust_filter_.getFilteredPointCloud();
+    RS_WARNING << " after: " << cloud->points.size() << RS_REND;
+  }
+
   LidarPointCloudMsg filtered_msg{cloud};
   filtered_msg.timestamp = msg.timestamp;
   filtered_msg.seq = msg.seq;
