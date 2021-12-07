@@ -8,9 +8,9 @@ project(rslidar_sdk)
 set(COMPILE_METHOD CATKIN CACHE STRING "Compilation method")
 
 #=======================================
-# Custom Point Type (XYZI, XYZIRT)
+# Custom Point Type (XYZI, XYZIRT, XYZRPYINR)
 #=======================================
-set(POINT_TYPE XYZI)
+set(POINT_TYPE XYZRPYINR)
 
 #========================
 # Project details / setup
@@ -118,6 +118,8 @@ if(${POINT_TYPE} STREQUAL "XYZI")
 add_definitions(-DPOINT_TYPE_XYZI)
 elseif(${POINT_TYPE} STREQUAL "XYZIRT")
 add_definitions(-DPOINT_TYPE_XYZIRT)
+elseif(${POINT_TYPE} STREQUAL "XYZRPYINR")
+add_definitions(-DPOINT_TYPE_XYZRPYINR)
 endif()
 message(=============================================================)
 message("-- POINT_TYPE is ${POINT_TYPE}")

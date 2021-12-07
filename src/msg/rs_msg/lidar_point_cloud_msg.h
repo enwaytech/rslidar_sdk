@@ -38,18 +38,37 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 struct RsPointXYZIRT
 {
   PCL_ADD_POINT4D;
-  uint8_t intensity;
+  float intensity;
   uint16_t ring = 0;
   double timestamp = 0;
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 } EIGEN_ALIGN16;
-POINT_CLOUD_REGISTER_POINT_STRUCT(RsPointXYZIRT, (float, x, x)(float, y, y)(float, z, z)(uint8_t, intensity, intensity)(
+POINT_CLOUD_REGISTER_POINT_STRUCT(RsPointXYZIRT, (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(
                                                      uint16_t, ring, ring)(double, timestamp, timestamp))
+
+struct RsPointXYZRPYINR
+{
+  PCL_ADD_POINT4D;
+  float range = 0;
+  float pitch = 0;
+  float yaw = 0;
+  float intensity = 0;
+  uint8_t num_returns = 0;
+  uint8_t return_index = 0;
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+} EIGEN_ALIGN16;
+POINT_CLOUD_REGISTER_POINT_STRUCT(RsPointXYZRPYINR, (float, x, x)(float, y, y)(float, z, z)(float, range, range)(float, pitch, pitch)(
+                                                   float, yaw, yaw)(float, intensity, intensity)(uint8_t, num_returns, num_returns)(uint8_t, return_index, return_index))
+
+
 #ifdef POINT_TYPE_XYZI
 typedef pcl::PointXYZI PointT;
 #elif POINT_TYPE_XYZIRT
 
 typedef RsPointXYZIRT PointT;
+
+#elif POINT_TYPE_XYZRPYINR
+typedef RsPointXYZRPYINR PointT;
 #endif
 
 namespace robosense
