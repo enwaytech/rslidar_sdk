@@ -1,5 +1,5 @@
 common:
-  msg_source: 1                                         #0: not use Lidar
+  msg_source: 2                                         #0: not use Lidar
                                                         #1: packet message comes from online Lidar
                                                         #2: packet message comes from ROS or ROS2
                                                         #3: packet message comes from Pcap file
@@ -13,8 +13,8 @@ common:
 
 lidar:
   - driver:
-      lidar_type: RS128            #LiDAR type - RS16, RS32, RSBP, RS128, RS80, RSM1, RSHELIOS
-      frame_id: /rslidar           #Frame id of message
+      lidar_type: RSBP             #LiDAR type - RS16, RS32, RSBP, RS128, RS80, RSM1, RSHELIOS
+      frame_id: lidar_front_left   #Frame id of message
       msop_port: 6699              #Msop port of lidar
       difop_port: 7788             #Difop port of lidar
       start_angle: 0               #Start angle of point cloud
@@ -24,9 +24,11 @@ lidar:
       use_lidar_clock: false       #True--Use the lidar clock as the message timestamp
                                    #False-- Use the system clock as the timestamp  
     ros:
-      ros_recv_packet_topic: /rslidar_packets          #Topic used to receive lidar packets from ROS
+      ros_recv_packet_topic: /sensors/lidar/lidar_front_left/rslidar_packets          #Topic used to receive lidar packets from ROS
       ros_send_packet_topic: /rslidar_packets          #Topic used to send lidar packets through ROS
       ros_send_point_cloud_topic: /rslidar_points      #Topic used to send point cloud through ROS
+      remove_duplicates: true                          #Only valid if sensor is in dual return mode
+                                                       #send unique points and remove duplicates
     proto:
       point_cloud_recv_port: 60021                     #Port number used for receiving point cloud 
       point_cloud_send_port: 60021                     #Port number which the point cloud will be send to

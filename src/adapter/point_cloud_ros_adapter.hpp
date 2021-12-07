@@ -51,6 +51,7 @@ public:
 private:
   std::shared_ptr<ros::NodeHandle> nh_;
   ros::Publisher point_cloud_pub_;
+  bool remove_duplicates_;
 };
 
 inline void PointCloudRosAdapter::init(const YAML::Node& config)
@@ -60,6 +61,7 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config)
   nh_ = std::unique_ptr<ros::NodeHandle>(new ros::NodeHandle());
   yamlRead<bool>(config, "send_point_cloud_ros", send_point_cloud_ros, false);
   yamlRead<std::string>(config["ros"], "ros_send_point_cloud_topic", ros_send_topic, "rslidar_points");
+  yamlRead<bool>(config["ros"], "remove_duplicates", remove_duplicates_, false);
   if (send_point_cloud_ros)
   {
     point_cloud_pub_ = nh_->advertise<sensor_msgs::PointCloud2>(ros_send_topic, 10);
@@ -68,6 +70,42 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config)
 
 inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 {
+  if (remove_duplicates_)
+  {
+    pcl::PointCloud<PointT>::Ptr filtered_cloud(new pcl::PointCloud<PointT>);
+    filtered_cloud->header = msg.point_cloud_ptr->header;
+
+    pcl::PointIndices indices;
+    pcl::PointIndices::Ptr duplicates (new pcl::PointIndices ());
+    RS_WARNING << "Size before removing duplicates: " << msg.point_cloud_ptr->points.size();
+
+    for (size_t idx = 32; idx < msg.point_cloud_ptr->points.size(); ++idx)
+    {
+      const PointT& point {msg.point_cloud_ptr->points[idx]};
+      const PointT& first_return {msg.point_cloud_ptr->points[idx - 32]};
+      if (point.yaw == first_return.yaw && point.pitch == first_return.pitch)
+      {
+        if (point.range != first_return.range)
+        {
+          indices.indices.emplace_back(idx);
+        }
+      }
+      else
+      {
+        indices.indices.emplace_back(idx);
+      }
+
+    }
+    pcl::copyPointCloud(*(msg.point_cloud_ptr), indices.indices, *filtered_cloud);
+    RS_WARNING << " after: " << filtered_cloud->points.size() << RS_REND;
+    LidarPointCloudMsg filtered_msg{filtered_cloud};
+    filtered_msg.timestamp = msg.timestamp;
+    filtered_msg.seq = msg.seq;
+    filtered_msg.frame_id = msg.frame_id;
+    point_cloud_pub_.publish(toRosMsg(filtered_msg));
+    return;
+  }
+
   point_cloud_pub_.publish(toRosMsg(msg));
 }
 
