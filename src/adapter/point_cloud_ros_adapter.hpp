@@ -35,7 +35,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ros/ros.h>
 #include "adapter/adapter_base.hpp"
 #include "msg/ros_msg_translator.h"
-
+#include <optional>
+#include "lidar_self_filter/self_filter_setup.h"
+#include "lidar_self_filter/filter.h"
 namespace robosense
 {
 namespace lidar
@@ -49,9 +51,22 @@ public:
   void sendPointCloud(const LidarPointCloudMsg& msg);
 
 private:
+  lidar_self_filter::LidarSettings makeSelfFilterSettings(const YAML::Node& config) const;
+  std::optional<geometry_msgs::TransformStamped> lookupTransformToBaseLink() const;
+
   std::shared_ptr<ros::NodeHandle> nh_;
   ros::Publisher point_cloud_pub_;
   bool remove_duplicates_;
+  std::string frame_id_;
+  
+  bool self_filter_setup_enabled_;
+  std::optional<SelfFilterSetup> self_filter_setup_;
+  
+  bool self_filter_enabled_;
+  std::optional<lidar_self_filter::Filter> self_filter_;
+
+  tf2_ros::Buffer transform_buffer_;
+  tf2_ros::TransformListener transform_listener_{transform_buffer_};
 };
 
 inline void PointCloudRosAdapter::init(const YAML::Node& config)
@@ -61,28 +76,56 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config)
   nh_ = std::unique_ptr<ros::NodeHandle>(new ros::NodeHandle());
   yamlRead<bool>(config, "send_point_cloud_ros", send_point_cloud_ros, false);
   yamlRead<std::string>(config["ros"], "ros_send_point_cloud_topic", ros_send_topic, "rslidar_points");
-  yamlRead<bool>(config["ros"], "remove_duplicates", remove_duplicates_, false);
+
   if (send_point_cloud_ros)
   {
     point_cloud_pub_ = nh_->advertise<sensor_msgs::PointCloud2>(ros_send_topic, 10);
+  }
+
+  yamlRead<bool>(config["ros"], "remove_duplicates", remove_duplicates_, false);
+  yamlRead<std::string>(config["driver"], "frame_id", frame_id_, "rslidar");
+
+  yamlRead<bool>(config["self_filter"], "self_filter_setup", self_filter_setup_enabled_, false);
+  if (self_filter_setup_enabled_)
+  {
+    ros::NodeHandle filter_handle {"~/lidar_self_filter_" + frame_id_};
+    const lidar_self_filter::LidarSettings self_filter_lidar_settings = makeSelfFilterSettings(config);
+    const std::string filter_file_path {"config/self_filter_data_" + frame_id_};
+    self_filter_setup_.emplace(filter_handle, self_filter_lidar_settings, frame_id_, filter_file_path);
+  }
+  
+  yamlRead<bool>(config["self_filter"], "self_filter_enabled", self_filter_enabled_, false);
+  if(self_filter_enabled_ && !self_filter_setup_enabled_)
+  {
+    const lidar_self_filter::LidarSettings self_filter_lidar_settings = makeSelfFilterSettings(config);
+    const std::string filter_file_path {"config/self_filter_data_" + frame_id_};
+    const lidar_self_filter::Filter self_filter {
+        filter_file_path, self_filter_lidar_settings, lookupTransformToBaseLink()};
+    self_filter_.emplace(self_filter);
   }
 }
 
 inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 {
+  if (self_filter_setup_enabled_)
+  {
+    self_filter_setup_->filter(msg);
+  }
+
+  pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
+  cloud->header = msg.point_cloud_ptr->header;
+  pcl::copyPointCloud(*(msg.point_cloud_ptr), *cloud);
+
   if (remove_duplicates_)
   {
-    pcl::PointCloud<PointT>::Ptr filtered_cloud(new pcl::PointCloud<PointT>);
-    filtered_cloud->header = msg.point_cloud_ptr->header;
-
     pcl::PointIndices indices;
     pcl::PointIndices::Ptr duplicates (new pcl::PointIndices ());
-    RS_WARNING << "Size before removing duplicates: " << msg.point_cloud_ptr->points.size();
+    RS_WARNING << "Size before removing duplicates: " << cloud->points.size();
 
-    for (size_t idx = 32; idx < msg.point_cloud_ptr->points.size(); ++idx)
+    for (size_t idx = 32; idx < cloud->points.size(); ++idx)
     {
-      const PointT& point {msg.point_cloud_ptr->points[idx]};
-      const PointT& first_return {msg.point_cloud_ptr->points[idx - 32]};
+      const PointT& point {cloud->points[idx]};
+      const PointT& first_return {cloud->points[idx - 32]};
       if (point.yaw == first_return.yaw && point.pitch == first_return.pitch)
       {
         if (point.range != first_return.range)
@@ -96,18 +139,117 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
       }
 
     }
-    pcl::copyPointCloud(*(msg.point_cloud_ptr), indices.indices, *filtered_cloud);
-    RS_WARNING << " after: " << filtered_cloud->points.size() << RS_REND;
-    LidarPointCloudMsg filtered_msg{filtered_cloud};
-    filtered_msg.timestamp = msg.timestamp;
-    filtered_msg.seq = msg.seq;
-    filtered_msg.frame_id = msg.frame_id;
-    point_cloud_pub_.publish(toRosMsg(filtered_msg));
-    return;
+    pcl::copyPointCloud(*(cloud), indices.indices, *cloud);
+    RS_WARNING << " after: " << cloud->points.size() << RS_REND;
   }
 
-  point_cloud_pub_.publish(toRosMsg(msg));
+  if (self_filter_enabled_)
+  {
+    pcl::PointIndices indices;
+    RS_WARNING << "Size before self-filtering: " << cloud->points.size();
+    for (size_t idx = 0; idx < cloud->points.size(); ++idx)
+    {
+      const PointT& point {cloud->points[idx]};
+      if (std::isnan(point.x)
+          || std::isnan(point.y)
+          || std::isnan(point.z)
+          || std::isnan(point.yaw)
+          || std::isnan(point.pitch)
+          || std::isnan(point.range))
+      {
+        continue;
+      }
+      if (!self_filter_->isSelfPoint(point.yaw,
+                                     point.pitch,
+                                     point.range,
+                                     point.x,
+                                     point.y,
+                                     point.z))
+      {
+        indices.indices.emplace_back(idx);
+      }
+    }
+    pcl::copyPointCloud(*cloud, indices.indices, *cloud);
+    RS_WARNING << " after: " << cloud->points.size() << RS_REND;
+  }
+  LidarPointCloudMsg filtered_msg{cloud};
+  filtered_msg.timestamp = msg.timestamp;
+  filtered_msg.seq = msg.seq;
+  filtered_msg.frame_id = msg.frame_id;
+  point_cloud_pub_.publish(toRosMsg(filtered_msg));
 }
+
+inline lidar_self_filter::LidarSettings
+PointCloudRosAdapter::makeSelfFilterSettings(const YAML::Node& config) const
+{
+  std::string frame_id {"rslidar"};
+  yamlRead<std::string>(config["driver"], "frame_id", frame_id, "rslidar");
+
+  RS_WARNING << "makeSelfFilterSettings: " << frame_id << RS_REND;
+
+  lidar_self_filter::LidarSettings settings;
+  settings.serial = frame_id;
+  settings.link = frame_id;
+
+  double yaw_resolution;
+  yamlRead<double>(config["self_filter"], "yaw_resolution", yaw_resolution, 0.01);
+  settings.yaw_resolution = yaw_resolution;
+
+  double min_yaw;
+  yamlRead<double>(config["self_filter"], "min_yaw", min_yaw, 0.0);
+  settings.min_yaw = min_yaw;
+
+  double max_yaw;
+  yamlRead<double>(config["self_filter"], "max_yaw", max_yaw, 360.0);
+  settings.max_yaw = max_yaw;
+
+  double pitch_resolution;
+  yamlRead<double>(config["self_filter"], "pitch_resolution", pitch_resolution, 2.81);
+  settings.pitch_resolution = pitch_resolution;
+
+  double min_pitch;
+  yamlRead<double>(config["self_filter"], "min_pitch", min_pitch, 2.31);
+  settings.min_pitch = min_pitch;
+
+  double max_pitch;
+  yamlRead<double>(config["self_filter"], "max_pitch", max_pitch, 89.5);
+  settings.max_pitch = max_pitch;
+
+  return settings;
+}
+
+inline std::optional<geometry_msgs::TransformStamped>
+PointCloudRosAdapter::lookupTransformToBaseLink() const
+{
+  constexpr std::string_view k_base_link_frame {"base_link"};
+
+  constexpr double transform_timeout {2.0};
+
+  try
+  {
+    if (transform_buffer_.canTransform(static_cast<std::string>(k_base_link_frame), frame_id_, ros::Time(0.0), ros::Duration(transform_timeout)))
+    {
+      return transform_buffer_.lookupTransform(static_cast<std::string>(k_base_link_frame), frame_id_, ros::Time(0.0));
+    }
+    ROS_WARN_STREAM("Failed transform of point from sensor frame " << frame_id_ << " to base_link: " << ". Self-filtering will not be possible");
+    return std::nullopt;
+  }
+  catch (tf2::TransformException& ex)
+  {
+    ROS_WARN_STREAM("Failed transform of point from sensor frame " << frame_id_ << " to base_link: " << ex.what()
+                                                                  << ". Self-filtering will not be possible");
+#ifdef DEBUG
+    geometry_msgs::TransformStamped test;
+    test.child_frame_id = frame_id_;
+    test.header.frame_id = "base_link";
+    test.transform.translation.x = 0.0;
+    test.transform.translation.z = 0.0;
+    test.transform.rotation.w = 1.0;
+#endif
+    return std::nullopt;
+  }
+}
+
 
 }  // namespace lidar
 }  // namespace robosense

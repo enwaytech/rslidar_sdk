@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 cmake_policy(SET CMP0048 NEW)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD_LIBRARIES -lstdc++fs)
 project(rslidar_sdk)
 
 #=======================================
@@ -19,7 +22,7 @@ set(PROJECT_NAME rslidar_sdk)
 add_definitions(-DPROJECT_PATH="${PROJECT_SOURCE_DIR}")
 set(CMAKE_BUILD_TYPE RELEASE)
 add_definitions(-O3)
-add_definitions(-std=c++14)
+#add_definitions(-std=c++14)
 add_compile_options(-Wall)
 
 #========================
@@ -90,9 +93,12 @@ add_definitions(${PCL_DEFINITIONS})
 #Catkin#
 if(${COMPILE_METHOD} STREQUAL "CATKIN")
   set(PROJECT_CATKIN_DEPS
-      sensor_msgs
+      lidar_self_filter
       nodelet
       pluginlib
+      sensor_msgs
+      tf2
+      tf2_ros
   )
   find_package(catkin REQUIRED COMPONENTS
                roscpp
@@ -110,6 +116,8 @@ include_directories(${PROJECT_SOURCE_DIR}/src)
 add_subdirectory(src/rs_driver)
 find_package(rs_driver REQUIRED)
 include_directories(${rs_driver_INCLUDE_DIRS})
+#Catkin directories
+include_directories(${catkin_INCLUDE_DIRS})
 
 #========================
 # Point Type Definition
@@ -137,6 +145,7 @@ if(NOT PROTOC MATCHES "NOTFOUND" AND Protobuf_FOUND)
       )
   add_executable(rslidar_sdk_node
               node/rslidar_sdk_node.cpp
+              src/lidar_self_filter/self_filter_setup.cpp
               src/manager/adapter_manager.cpp
               ${PROTOBUF_SOURCES}
               )
@@ -145,9 +154,11 @@ if(NOT PROTOC MATCHES "NOTFOUND" AND Protobuf_FOUND)
                       ${YAML_CPP_LIBRARIES}
                       ${PROTOBUF_LIBRARY}
                       ${rs_driver_LIBRARIES}
+                      ${catkin_LIBRARIES}
                       )
   add_library(rslidar_sdk_nodelet
               node/rslidar_sdk_nodelet.cpp
+              src/lidar_self_filter/self_filter_setup.cpp
               src/manager/adapter_manager.cpp
               ${PROTOBUF_SOURCES}
               )
@@ -156,26 +167,31 @@ if(NOT PROTOC MATCHES "NOTFOUND" AND Protobuf_FOUND)
                       ${YAML_CPP_LIBRARIES}
                       ${PROTOBUF_LIBRARY}
                       ${rs_driver_LIBRARIES}
+                      ${catkin_LIBRARIES}
                       )
 else(NOT PROTOC MATCHES "NOTFOUND" AND Protobuf_FOUND)
   add_executable(rslidar_sdk_node
               node/rslidar_sdk_node.cpp
+              src/lidar_self_filter/self_filter_setup.cpp
               src/manager/adapter_manager.cpp
               )
   target_link_libraries(rslidar_sdk_node
                       ${PCL_LIBRARIES}
                       ${YAML_CPP_LIBRARIES}
                       ${rs_driver_LIBRARIES}
+                      ${catkin_LIBRARIES}
                       )
 
   add_library(rslidar_sdk_nodelet
               node/rslidar_sdk_nodelet.cpp
+              src/lidar_self_filter/self_filter_setup.cpp
               src/manager/adapter_manager.cpp
               )
   target_link_libraries(rslidar_sdk_nodelet
                       ${PCL_LIBRARIES}
                       ${YAML_CPP_LIBRARIES}
                       ${rs_driver_LIBRARIES}
+                      ${catkin_LIBRARIES}
                       )
 
 endif(NOT PROTOC MATCHES "NOTFOUND" AND Protobuf_FOUND)
