@@ -72,7 +72,6 @@ robosense::lidar::SelfFilterSetup::filter(const LidarPointCloudMsg& msg)
 bool
 robosense::lidar::SelfFilterSetup::inBufferedFootprint(const PointT& point)
 {
-
   geometry_msgs::PointStamped sensor_point;
   sensor_point.header.frame_id = sensor_frame_;
   sensor_point.point.x = point.x;

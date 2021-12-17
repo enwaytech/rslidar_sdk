@@ -75,6 +75,7 @@ private:
 
 inline void PointCloudRosAdapter::init(const YAML::Node& config)
 {
+  usleep(10000);
   bool send_point_cloud_ros;
   std::string ros_send_topic;
   nh_ = std::unique_ptr<ros::NodeHandle>(new ros::NodeHandle());
@@ -92,7 +93,7 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config)
   yamlRead<bool>(config["self_filter"], "self_filter_setup", self_filter_setup_enabled_, false);
   if (self_filter_setup_enabled_)
   {
-    ros::NodeHandle filter_handle {"~/lidar_self_filter_" + frame_id_};
+    ros::NodeHandle filter_handle {"~/lidar_self_filter_" + frame_id_}; // _" + frame_id_};
     const lidar_self_filter::LidarSettings self_filter_lidar_settings = makeSelfFilterSettings(config);
     const std::string filter_file_path {"config/self_filter_data_" + frame_id_};
     self_filter_setup_.emplace(filter_handle, self_filter_lidar_settings, frame_id_, filter_file_path);
@@ -113,20 +114,48 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config)
 
 inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 {
+
+#if 1
   if (self_filter_setup_enabled_)
   {
     self_filter_setup_->filter(msg);
+    return;
   }
 
   pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
   cloud->header = msg.point_cloud_ptr->header;
   pcl::copyPointCloud(*(msg.point_cloud_ptr), *cloud);
 
+  if (0)
+  {
+    // Georg Measuring end:
+    auto start = std::chrono::system_clock::now();
+    pcl::PointIndices indices;
+    //pcl::PointIndices::Ptr duplicates (new pcl::PointIndices ());
+    //RS_WARNING << "Size before removing duplicates: " << cloud->points.size();
+    // if dual shot each shot has 32 first and 32 second returns.
+    for (size_t idx = 0; idx < cloud->points.size() / 64; ++idx)
+    {
+      if (idx % 4 == 0)
+      {
+        for (unsigned int i = 0; i < 64; i++)
+        {
+          indices.indices.emplace_back(idx * 64 + i);
+        }
+      }
+    }
+    pcl::copyPointCloud(*(cloud), indices.indices, *cloud);
+    //RS_WARNING << " after: " << cloud->points.size() << RS_REND;
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    //RS_WARNING << "Remove every second shot Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() << "ms" << RS_REND;
+  }
+
   if (remove_duplicates_)
   {
     pcl::PointIndices indices;
     pcl::PointIndices::Ptr duplicates (new pcl::PointIndices ());
-    RS_WARNING << "Size before removing duplicates: " << cloud->points.size();
+    //RS_WARNING << "Size before removing duplicates: " << cloud->points.size();
 
     for (size_t idx = 32; idx < cloud->points.size(); ++idx)
     {
@@ -143,16 +172,15 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
       {
         indices.indices.emplace_back(idx);
       }
-
     }
     pcl::copyPointCloud(*(cloud), indices.indices, *cloud);
-    RS_WARNING << " after: " << cloud->points.size() << RS_REND;
+    //RS_WARNING << " after: " << cloud->points.size() << RS_REND;
   }
 
   if (self_filter_enabled_)
   {
     pcl::PointIndices indices;
-    RS_WARNING << "Size before self-filtering: " << cloud->points.size();
+    //RS_WARNING << "Size before self-filtering: " << cloud->points.size();
     for (size_t idx = 0; idx < cloud->points.size(); ++idx)
     {
       const PointT& point {cloud->points[idx]};
@@ -176,19 +204,19 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
       }
     }
     pcl::copyPointCloud(*cloud, indices.indices, *cloud);
-    RS_WARNING << " after: " << cloud->points.size() << RS_REND;
+    //RS_WARNING << " after: " << cloud->points.size() << RS_REND;
   }
 
   if (dust_filter_enabled_)
   {
-    RS_WARNING << "Size before dust-filtering: " << cloud->points.size();
+    //RS_WARNING << "Size before dust-filtering: " << cloud->points.size();
     dust_filter_.startNewPointCloud(cloud->header, cloud->size());
     for (const auto p : *cloud)
     {
       dust_filter_.addMeasurement(p);
     }
     *cloud = dust_filter_.getFilteredPointCloud();
-    RS_WARNING << " after: " << cloud->points.size() << RS_REND;
+    //RS_WARNING << " after: " << cloud->points.size() << RS_REND;
   }
 
   LidarPointCloudMsg filtered_msg{cloud};
@@ -196,6 +224,7 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
   filtered_msg.seq = msg.seq;
   filtered_msg.frame_id = msg.frame_id;
   point_cloud_pub_.publish(toRosMsg(filtered_msg));
+#endif
 }
 
 inline lidar_self_filter::LidarSettings
