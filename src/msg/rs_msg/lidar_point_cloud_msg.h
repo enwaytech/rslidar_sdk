@@ -38,12 +38,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 struct RsPointXYZIRT
 {
   PCL_ADD_POINT4D;
-  float intensity;
+  std::uint8_t intensity;
   std::uint16_t ring = 0;
   double timestamp = 0;
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 } EIGEN_ALIGN16;
-POINT_CLOUD_REGISTER_POINT_STRUCT(RsPointXYZIRT, (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(
+POINT_CLOUD_REGISTER_POINT_STRUCT(RsPointXYZIRT, (float, x, x)(float, y, y)(float, z, z)(std::uint8_t, intensity, intensity)(
                                                      uint16_t, ring, ring)(double, timestamp, timestamp))
 
 struct RsPointXYZRPYINR
@@ -52,13 +52,13 @@ struct RsPointXYZRPYINR
   float range = 0;
   float pitch = 0;
   float yaw = 0;
-  float intensity = 0;
+  std::uint8_t intensity = 0;
   std::uint8_t num_returns = 0;
   std::uint8_t return_index = 0;
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 } EIGEN_ALIGN16;
 POINT_CLOUD_REGISTER_POINT_STRUCT(RsPointXYZRPYINR, (float, x, x)(float, y, y)(float, z, z)(float, range, range)(float, pitch, pitch)(
-                                                   float, yaw, yaw)(float, intensity, intensity)(std::uint8_t, num_returns, num_returns)(std::uint8_t, return_index, return_index))
+                                                   float, yaw, yaw)(std::uint8_t, intensity, intensity)(std::uint8_t, num_returns, num_returns)(std::uint8_t, return_index, return_index))
 
 
 #ifdef POINT_TYPE_XYZI

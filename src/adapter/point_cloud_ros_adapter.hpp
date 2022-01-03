@@ -38,7 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <optional>
 #include "lidar_self_filter/self_filter_setup.h"
 #include "lidar_self_filter/filter.h"
-#include "dust_filter/dust_filter.h"
+#include "dust_filter_robosense/dust_filter.h"
 namespace robosense
 {
 namespace lidar
@@ -70,7 +70,7 @@ private:
   tf2_ros::TransformListener transform_listener_{transform_buffer_};
 
   bool dust_filter_enabled_;
-  dust_filter::DustFilter<PointT> dust_filter_;
+  dust_filter_robosense::DustFilter<PointT> dust_filter_;
 };
 
 inline void PointCloudRosAdapter::init(const YAML::Node& config)

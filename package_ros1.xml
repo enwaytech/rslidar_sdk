@@ -18,7 +18,7 @@
   <depend>lidar_self_filter</depend>
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
-  <depend>dust_filter</depend>
+  <depend>dust_filter_robosense</depend>
   <export>
     <nodelet plugin="${prefix}/nodelets.xml"/>
   </export>
