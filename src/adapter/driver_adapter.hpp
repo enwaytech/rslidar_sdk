@@ -260,7 +260,7 @@ inline LidarPointCloudMsg DriverAdapter::core2SDK(const lidar::PointCloudMsg<Poi
   point_cloud_msg.frame_id = msg.frame_id;
   point_cloud_msg.timestamp = msg.timestamp;
   point_cloud_msg.seq = msg.seq;
-  return std::move(point_cloud_msg);
+  return point_cloud_msg;
 }
 
 }  // namespace lidar
