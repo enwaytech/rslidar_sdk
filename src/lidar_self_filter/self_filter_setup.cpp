@@ -50,7 +50,7 @@ robosense::lidar::SelfFilterSetup::filter(const LidarPointCloudMsg& msg)
 
   for (const auto point : msg.point_cloud_ptr->points)
   {
-    if (std::isnan(point.range) || std::isnan(point.yaw) || std::isnan(point.pitch) || std::isnan(point.x) || std::isnan(point.y) || std::isnan(point.z))
+    if (std::isnan(point.x) || std::isnan(point.y) || std::isnan(point.z) || std::isnan(point.range) || std::isnan(point.yaw) || std::isnan(point.pitch))
     {
       continue;
     }
