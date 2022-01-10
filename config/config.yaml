@@ -7,6 +7,7 @@ common:
                                                         #5: point cloud comes from Protobuf-UDP
   send_packet_ros: false                                #true: Send packets through ROS or ROS2(Used to record packet)
   send_point_cloud_ros: true                            #true: Send point cloud through ROS or ROS2
+
   send_packet_proto: false                              #true: Send packets through Protobuf-UDP
   send_point_cloud_proto: false                         #true: Send point cloud through Protobuf-UDP
   pcap_path: /home/robosense/lidar.pcap                 #The path of pcap file
@@ -30,6 +31,8 @@ lidar:
       remove_duplicates: true                          #Only valid if sensor is in dual return mode
                                                        #Publish only unique points and remove duplicates
       dust_filter_enabled: true                        #Filter out dust points from pointcloud
+      send_point_cloud_ros_self_filtered: true         #Send self-filtered point cloud
+      send_point_cloud_ros_unfiltered: true            #Send unfiltered point cloud
     self_filter:
       self_filter_enabled: true
       self_filter_setup: false

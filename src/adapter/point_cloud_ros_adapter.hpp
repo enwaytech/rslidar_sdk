@@ -58,6 +58,14 @@ private:
   std::optional<geometry_msgs::TransformStamped> lookupTransformToBaseLink() const;
 
   std::shared_ptr<ros::NodeHandle> nh_;
+
+  bool send_point_cloud_ros_unfiltered_;
+  ros::Publisher point_cloud_pub_unfiltered_;
+
+  bool send_point_cloud_ros_self_filtered_;
+  ros::Publisher point_cloud_pub_self_filtered_;
+
+  bool send_point_cloud_ros_;
   ros::Publisher point_cloud_pub_;
   bool remove_duplicates_;
   std::string frame_id_;
@@ -78,15 +86,29 @@ private:
 inline void PointCloudRosAdapter::init(const YAML::Node& config)
 {
   usleep(10000);
-  bool send_point_cloud_ros;
+
   std::string ros_send_topic;
   nh_ = std::unique_ptr<ros::NodeHandle>(new ros::NodeHandle());
-  yamlRead<bool>(config, "send_point_cloud_ros", send_point_cloud_ros, false);
+  yamlRead<bool>(config, "send_point_cloud_ros", send_point_cloud_ros_, false);
   yamlRead<std::string>(config["ros"], "ros_send_point_cloud_topic", ros_send_topic, "rslidar_points");
 
-  if (send_point_cloud_ros)
+  if (send_point_cloud_ros_)
   {
     point_cloud_pub_ = nh_->advertise<sensor_msgs::PointCloud2>(ros_send_topic, 10);
+  }
+
+  yamlRead<bool>(config["ros"], "send_point_cloud_ros_unfiltered", send_point_cloud_ros_unfiltered_, false);
+
+  if (send_point_cloud_ros_unfiltered_)
+  {
+    point_cloud_pub_unfiltered_ = nh_->advertise<sensor_msgs::PointCloud2>(ros_send_topic + "_unfiltered", 10);
+  }
+
+  yamlRead<bool>(config["ros"], "send_point_cloud_ros_self_filtered", send_point_cloud_ros_self_filtered_, false);
+
+  if (send_point_cloud_ros_self_filtered_)
+  {
+    point_cloud_pub_self_filtered_ = nh_->advertise<sensor_msgs::PointCloud2>(ros_send_topic + "_self_filtered", 10);
   }
 
   yamlRead<bool>(config["ros"], "remove_duplicates", remove_duplicates_, false);
@@ -165,6 +187,15 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
     pcl::copyPointCloud(*(cloud), indices.indices, *cloud);
     //RS_WARNING << " after: " << cloud->points.size() << RS_REND;
   }
+  if (send_point_cloud_ros_unfiltered_)
+  {
+    LidarPointCloudMsg unfiltered_msg{cloud};
+    unfiltered_msg.timestamp = msg.timestamp;
+    unfiltered_msg.seq = msg.seq;
+    unfiltered_msg.frame_id = msg.frame_id;
+    point_cloud_pub_unfiltered_.publish(toRosMsg(unfiltered_msg));
+  }
+
 
   if (self_filter_enabled_)
   {
@@ -201,6 +232,15 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 #endif
   }
 
+  if (send_point_cloud_ros_self_filtered_)
+  {
+    LidarPointCloudMsg self_filtered_msg{cloud};
+    self_filtered_msg.timestamp = msg.timestamp;
+    self_filtered_msg.seq = msg.seq;
+    self_filtered_msg.frame_id = msg.frame_id;
+    point_cloud_pub_self_filtered_.publish(toRosMsg(self_filtered_msg));
+  }
+
   if (dust_filter_enabled_)
   {
     //RS_WARNING << "Size before dust-filtering: " << cloud->points.size();
@@ -213,12 +253,14 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
     //RS_WARNING << " after: " << cloud->points.size() << RS_REND;
   }
 
-  LidarPointCloudMsg filtered_msg{cloud};
-  filtered_msg.timestamp = msg.timestamp;
-  filtered_msg.seq = msg.seq;
-  filtered_msg.frame_id = msg.frame_id;
-  point_cloud_pub_.publish(toRosMsg(filtered_msg));
-
+  if (send_point_cloud_ros_)
+  {
+    LidarPointCloudMsg filtered_msg{cloud};
+    filtered_msg.timestamp = msg.timestamp;
+    filtered_msg.seq = msg.seq;
+    filtered_msg.frame_id = msg.frame_id;
+    point_cloud_pub_.publish(toRosMsg(filtered_msg));
+  }
 }
 
 inline lidar_self_filter::LidarSettings
