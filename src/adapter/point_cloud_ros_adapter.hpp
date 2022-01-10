@@ -139,17 +139,6 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config)
 inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 {
 
-  if (self_filter_setup_enabled_)
-  {
-#ifdef POINT_TYPE_XYZRPYINR
-    self_filter_setup_->filter(msg);
-#else
-    RS_WARNING << "Self filter setup only works with POINT_TYPE_XYZRPYINR" << RS_REND;
-    exit(1);
-#endif
-    return;
-  }
-
   pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
   cloud->header = msg.point_cloud_ptr->header;
   pcl::copyPointCloud(*(msg.point_cloud_ptr), *cloud);
@@ -197,7 +186,7 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
   }
 
 
-  if (self_filter_enabled_)
+  if (self_filter_enabled_ && !self_filter_setup_enabled_)
   {
 #ifdef POINT_TYPE_XYZRPYINR
     pcl::PointIndices indices;
@@ -251,6 +240,16 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
     }
     *cloud = dust_filter_.getFilteredPointCloud();
     //RS_WARNING << " after: " << cloud->points.size() << RS_REND;
+  }
+
+  if (self_filter_setup_enabled_)
+  {
+#ifdef POINT_TYPE_XYZRPYINR
+    self_filter_setup_->filter(msg);
+#else
+    RS_WARNING << "Self filter setup only works with POINT_TYPE_XYZRPYINR" << RS_REND;
+    exit(1);
+#endif
   }
 
   if (send_point_cloud_ros_)
