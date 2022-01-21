@@ -52,7 +52,7 @@ public:
   inline void regRecvCallback(const std::function<void(const CameraTrigger&)>& callback);
   void decodeScan(const ScanMsg& msg);
   void decodePacket(const PacketMsg& msg);
-
+  inline std::shared_ptr<lidar::LidarDriver<PointT>> getLidarDriverPtr();
 private:
   void localPointsCallback(const PointCloudMsg<PointT>& msg);
   void localScanCallback(const ScanMsg& msg);
@@ -261,6 +261,11 @@ inline LidarPointCloudMsg DriverAdapter::core2SDK(const lidar::PointCloudMsg<Poi
   point_cloud_msg.timestamp = msg.timestamp;
   point_cloud_msg.seq = msg.seq;
   return point_cloud_msg;
+}
+
+inline std::shared_ptr<lidar::LidarDriver<PointT>> DriverAdapter::getLidarDriverPtr()
+{
+  return driver_ptr_;
 }
 
 }  // namespace lidar

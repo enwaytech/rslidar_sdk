@@ -98,7 +98,8 @@ void AdapterManager::init(const YAML::Node& config)
         packet_thread_flag_ = true;
         lidar_config[i]["msg_source"] = (int)MsgSource::MSG_FROM_ROS_PACKET;
         send_packet_ros = false;
-        point_cloud_receive_adapter_vec_.emplace_back(createReceiver(lidar_config[i], AdapterType::DriverAdapter));
+        recv_ptr = createReceiver(lidar_config[i], AdapterType::DriverAdapter);
+        point_cloud_receive_adapter_vec_.emplace_back(recv_ptr);
         packet_receive_adapter_vec_.emplace_back(createReceiver(lidar_config[i], AdapterType::PacketRosAdapter));
         packet_receive_adapter_vec_[i]->regRecvCallback(
             std::bind(&AdapterBase::decodeScan, point_cloud_receive_adapter_vec_[i], std::placeholders::_1));
@@ -208,7 +209,8 @@ void AdapterManager::init(const YAML::Node& config)
                << RS_REND;
       RS_DEBUG << "------------------------------------------------------" << RS_REND;
       lidar_config[i]["send_point_cloud_ros"] = true;
-      AdapterBase::Ptr transmitter_ptr = createTransmitter(lidar_config[i], AdapterType::PointCloudRosAdapter);
+      std::shared_ptr<lidar::LidarDriver<PointT>> lidar_driver = std::dynamic_pointer_cast<DriverAdapter>(recv_ptr)->getLidarDriverPtr();
+      AdapterBase::Ptr transmitter_ptr = createTransmitter(lidar_config[i], AdapterType::PointCloudRosAdapter, lidar_driver);
       point_cloud_transmit_adapter_vec_.emplace_back(transmitter_ptr);
       point_cloud_receive_adapter_vec_[i]->regRecvCallback(
           std::bind(&AdapterBase::sendPointCloud, transmitter_ptr, std::placeholders::_1));
@@ -336,7 +338,8 @@ std::shared_ptr<AdapterBase> AdapterManager::createReceiver(const YAML::Node& co
 }
 
 std::shared_ptr<AdapterBase> AdapterManager::createTransmitter(const YAML::Node& config,
-                                                               const AdapterType& adapter_type)
+                                                               const AdapterType& adapter_type,
+                                                               const std::shared_ptr<lidar::LidarDriver<PointT>> driver_ptr)
 {
   std::shared_ptr<AdapterBase> transmitter;
   switch (adapter_type)
@@ -364,7 +367,7 @@ std::shared_ptr<AdapterBase> AdapterManager::createTransmitter(const YAML::Node&
     case AdapterType::PointCloudRosAdapter:
 #if (ROS_FOUND || ROS2_FOUND)
       transmitter = std::dynamic_pointer_cast<AdapterBase>(std::make_shared<PointCloudRosAdapter>());
-      transmitter->init(config);
+      transmitter->init(config, driver_ptr);
       break;
 #else
       RS_ERROR << "ROS not found! Could not use ROS functions!" << RS_REND;

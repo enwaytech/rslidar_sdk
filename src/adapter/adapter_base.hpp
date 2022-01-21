@@ -33,6 +33,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 #include "utility/common.h"
 #include "utility/yaml_reader.hpp"
+#include "rs_driver/api/lidar_driver.h"
 #include "rs_driver/msg/packet_msg.h"
 #include "rs_driver/msg/scan_msg.h"
 #include "msg/rs_msg/lidar_point_cloud_msg.h"
@@ -65,6 +66,7 @@ public:
   AdapterBase() = default;
   virtual ~AdapterBase();
   virtual void init(const YAML::Node& config) = 0;
+  virtual void init(const YAML::Node& config, const std::shared_ptr<lidar::LidarDriver<PointT>> driver_adapter);
   virtual void start();
   virtual void stop();
   virtual void sendScan(const ScanMsg& msg);
@@ -77,7 +79,13 @@ public:
   virtual void regRecvCallback(const std::function<void(const CameraTrigger&)>& callback);
   virtual void decodeScan(const ScanMsg& msg);
   virtual void decodePacket(const PacketMsg& msg);
+  //inline std::shared_ptr<lidar::LidarDriver<PointT>> getLidarDriverPtr();
 };
+
+inline void AdapterBase::init(const YAML::Node& config, const std::shared_ptr<lidar::LidarDriver<PointT>> driver_adapter)
+{
+  init(config);
+}
 
 inline AdapterBase::~AdapterBase()
 {

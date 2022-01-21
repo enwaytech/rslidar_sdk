@@ -34,12 +34,16 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef ROS_FOUND
 #include <ros/ros.h>
 #include "adapter/adapter_base.hpp"
+#include "adapter/driver_adapter.hpp"
 #include "msg/ros_msg_translator.h"
 #include <optional>
 
 #include "dust_filter_robosense/dust_filter.h"
 #include "lidar_self_filter/filter.h"
 #include "lidar_self_filter/self_filter_setup.h"
+
+constexpr int ECHO_SINGLE = 0;
+constexpr int ECHO_DUAL = 1;
 
 namespace robosense
 {
@@ -51,11 +55,14 @@ public:
   PointCloudRosAdapter() = default;
   ~PointCloudRosAdapter() = default;
   void init(const YAML::Node& config);
+  void init(const YAML::Node& config, const std::shared_ptr<lidar::LidarDriver<PointT>> driver_adapter);
   void sendPointCloud(const LidarPointCloudMsg& msg);
 
 private:
   lidar_self_filter::LidarSettings makeSelfFilterSettings(const YAML::Node& config) const;
   std::optional<geometry_msgs::TransformStamped> lookupTransformToBaseLink() const;
+  void initSelfFilterSetup();
+  void initSelfFilter();
 
   std::shared_ptr<ros::NodeHandle> nh_;
 
@@ -81,11 +88,23 @@ private:
 
   bool dust_filter_enabled_;
   dust_filter_robosense::DustFilter<PointT> dust_filter_;
+  std::shared_ptr<lidar::LidarDriver<PointT>> driver_adapter_;
+  YAML::Node config_;
+  int lidar_return_mode_;
 };
 
 inline void PointCloudRosAdapter::init(const YAML::Node& config)
 {
+  init(config, nullptr);
+}
+
+inline void PointCloudRosAdapter::init(const YAML::Node& config, const std::shared_ptr<lidar::LidarDriver<PointT>> driver_adapter)
+{
   usleep(10000);
+  lidar_return_mode_  = -1;
+  driver_adapter_ = driver_adapter;
+
+  config_ = config;
 
   std::string ros_send_topic;
   nh_ = std::unique_ptr<ros::NodeHandle>(new ros::NodeHandle());
@@ -115,42 +134,52 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config)
   yamlRead<std::string>(config["driver"], "frame_id", frame_id_, "rslidar");
 
   yamlRead<bool>(config["self_filter"], "self_filter_setup", self_filter_setup_enabled_, false);
-  if (self_filter_setup_enabled_)
-  {
-    ros::NodeHandle filter_handle {"~/lidar_self_filter_" + frame_id_}; // _" + frame_id_};
-    const lidar_self_filter::LidarSettings self_filter_lidar_settings = makeSelfFilterSettings(config);
-    const std::string filter_file_path {"config/self_filter_data_" + frame_id_};
-    self_filter_setup_.emplace(filter_handle, self_filter_lidar_settings, frame_id_, filter_file_path);
-  }
-  
   yamlRead<bool>(config["self_filter"], "self_filter_enabled", self_filter_enabled_, false);
-  if(self_filter_enabled_ && !self_filter_setup_enabled_)
-  {
-    const lidar_self_filter::LidarSettings self_filter_lidar_settings = makeSelfFilterSettings(config);
-    const std::string filter_file_path {"config/self_filter_data_" + frame_id_};
-    const lidar_self_filter::Filter self_filter {
-        filter_file_path, self_filter_lidar_settings, lookupTransformToBaseLink()};
-    self_filter_.emplace(self_filter);
-  }
-
   yamlRead<bool>(config["ros"], "dust_filter_enabled", dust_filter_enabled_, false);
+}
+
+inline void PointCloudRosAdapter::initSelfFilterSetup()
+{
+  ros::NodeHandle filter_handle {"~/lidar_self_filter_" + frame_id_};
+  const lidar_self_filter::LidarSettings self_filter_lidar_settings = makeSelfFilterSettings(config_);
+  const std::string filter_file_path {"config/self_filter_data_" + frame_id_};
+  self_filter_setup_.emplace(filter_handle, self_filter_lidar_settings, frame_id_, filter_file_path);
+}
+
+inline void PointCloudRosAdapter::initSelfFilter()
+{
+  const lidar_self_filter::LidarSettings self_filter_lidar_settings = makeSelfFilterSettings(config_);
+  const std::string filter_file_path {"config/self_filter_data_" + frame_id_};
+  const lidar_self_filter::Filter self_filter {
+      filter_file_path, self_filter_lidar_settings, lookupTransformToBaseLink()};
+  self_filter_.emplace(self_filter);
 }
 
 inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 {
+  if (lidar_return_mode_ != ECHO_SINGLE && lidar_return_mode_ != ECHO_DUAL)
+  {
+    if (!driver_adapter_->getReturnMode(lidar_return_mode_))
+    {
+      RS_WARNING << "Failed to get return mode from lidar" << RS_REND;
+    }
+  }
 
   pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
   cloud->header = msg.point_cloud_ptr->header;
   pcl::copyPointCloud(*(msg.point_cloud_ptr), *cloud);
 
-  if (remove_duplicates_)
+  if (remove_duplicates_)// && lidar_return_mode_ == ECHO_DUAL)
   {
     pcl::PointIndices indices;
     pcl::PointIndices::Ptr duplicates (new pcl::PointIndices ());
     //RS_WARNING << "Size before removing duplicates: " << cloud->points.size();
     // TODO: Get channels per block
-    constexpr unsigned int channels_per_block = 32;
 
+    int channels_per_block {0};
+
+    driver_adapter_->getChannelsPerBlock(channels_per_block);
+    RS_WARNING << "Channels per Block: " << channels_per_block << RS_REND;
     unsigned int blks_cloud = cloud->points.size() / channels_per_block;
     for (unsigned int blk_idx = 0; blk_idx < blks_cloud; blk_idx = blk_idx + 2)
     {
@@ -159,7 +188,7 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
         const int idx = blk_idx * channels_per_block + channel_idx;
         const PointT& first_return {cloud->points[idx]};
         const PointT& second_return {cloud->points[idx + channels_per_block]};
-        if (first_return.yaw == second_return.yaw && first_return.pitch == second_return.pitch)
+        if (first_return.pitch == second_return.pitch)
         {
           if (first_return.range == second_return.range)
           {
@@ -188,6 +217,11 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 
   if (self_filter_enabled_ && !self_filter_setup_enabled_)
   {
+    if (!self_filter_)
+    {
+      initSelfFilter();
+    }
+    // Initialize self-filter settings here the first time with serial number
 #ifdef POINT_TYPE_XYZRPYINR
     pcl::PointIndices indices;
     //RS_WARNING << "Size before self-filtering: " << cloud->points.size();
@@ -244,7 +278,12 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 
   if (self_filter_setup_enabled_)
   {
+    // Initialize the self-filter settings here with the serial number
 #ifdef POINT_TYPE_XYZRPYINR
+    if (!self_filter_setup_)
+    {
+      initSelfFilterSetup();
+    }
     self_filter_setup_->filter(msg);
 #else
     RS_WARNING << "Self filter setup only works with POINT_TYPE_XYZRPYINR" << RS_REND;
@@ -269,7 +308,17 @@ PointCloudRosAdapter::makeSelfFilterSettings(const YAML::Node& config) const
   yamlRead<std::string>(config["driver"], "frame_id", frame_id, "rslidar");
 
   lidar_self_filter::LidarSettings settings;
-  settings.serial = frame_id;
+
+  std::string serial_number;
+  if (driver_adapter_->getSerialNumber(serial_number))
+  {
+    settings.serial = frame_id;//serial_number;
+  }
+  else
+  {
+    RS_ERROR << "Could not get lidar serial number for self-filter." << RS_REND;
+  }
+
   settings.link = frame_id;
 
   double yaw_resolution;

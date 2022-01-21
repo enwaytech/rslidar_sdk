@@ -93,7 +93,7 @@ public:
 
 private:
   std::shared_ptr<AdapterBase> createReceiver(const YAML::Node& config, const AdapterType& adapter_type);
-  std::shared_ptr<AdapterBase> createTransmitter(const YAML::Node& config, const AdapterType& adapter_type);
+  std::shared_ptr<AdapterBase> createTransmitter(const YAML::Node& config, const AdapterType& adapter_type, const std::shared_ptr<lidar::LidarDriver<PointT>> driver_ptr = nullptr);
 
 private:
   bool packet_thread_flag_;

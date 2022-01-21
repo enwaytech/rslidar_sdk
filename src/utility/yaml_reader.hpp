@@ -42,8 +42,7 @@ inline void yamlReadAbort(const YAML::Node& yaml, const std::string& key, T& out
 {
   if (!yaml[key] || yaml[key].Type() == YAML::NodeType::Null)
   {
-    RS_ERROR << " : Not set " << key;
-    RS_ERROR << " value, Aborting!!!" << RS_REND;
+    RS_ERROR << " : Not set " << key << " value, Aborting!!!" << RS_REND;
     exit(-1);
   }
   else
