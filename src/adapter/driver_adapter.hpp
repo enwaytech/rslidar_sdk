@@ -117,6 +117,7 @@ inline void DriverAdapter::init(const YAML::Node& config)
   yamlRead<float>(driver_config, "roll", driver_param.decoder_param.transform_param.roll, 0);
   yamlRead<float>(driver_config, "pitch", driver_param.decoder_param.transform_param.pitch, 0);
   yamlRead<float>(driver_config, "yaw", driver_param.decoder_param.transform_param.yaw, 0);
+  yamlRead<uint16_t>(driver_config, "dual_return_downsample_ratio", driver_param.decoder_param.dual_return_downsample_ratio, 1);
   driver_param.lidar_type = driver_param.strToLidarType(lidar_type);
   driver_param.decoder_param.split_frame_mode = SplitFrameMode(split_frame_mode);
   if (config["camera"] && config["camera"].Type() != YAML::NodeType::Null)

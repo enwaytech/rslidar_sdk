@@ -45,17 +45,23 @@ namespace lidar
 class CloudNodelet : public nodelet::Nodelet
 {
 public:
-    CloudNodelet(){}
-    ~CloudNodelet(){}
+    CloudNodelet() = default;
+    ~CloudNodelet() = default;
+    void exceptionCallback(const Error& code);
 private:
     virtual void onInit();
     std::shared_ptr<AdapterManager> adapter_ptr_;
+    std::string nodelet_name_;
+    std::string log_prefix_;
 };
 
 void CloudNodelet::onInit()
 {
+    nodelet_name_ = getName();
+    log_prefix_ = "[" + nodelet_name_ + "]: ";
     std::string config_file = (std::string)PROJECT_PATH + "/config/config.yaml";
     getPrivateNodeHandle().param("rslidar_config_file", config_file, config_file);
+
     YAML::Node config;
     try
     {
@@ -66,10 +72,20 @@ void CloudNodelet::onInit()
         RS_ERROR << "Config file format wrong! Please check the format(e.g. indentation) " << RS_REND;
         return;
     }
+
     adapter_ptr_.reset(new AdapterManager());
     adapter_ptr_->init(config);
+    adapter_ptr_->regExceptionCallback(std::bind(&CloudNodelet::exceptionCallback, this, std::placeholders::_1));
     adapter_ptr_->start();
+
+    ROS_INFO_STREAM(log_prefix_ << "Nodelet initialized.");
 }
+
+void CloudNodelet::exceptionCallback(const Error& code)
+{
+  ROS_ERROR_STREAM(log_prefix_ << code.toString());
+}
+
 }   // namespace lidar
 }   // namespace robosense
 

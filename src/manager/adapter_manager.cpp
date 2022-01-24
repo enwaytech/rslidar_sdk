@@ -209,8 +209,8 @@ void AdapterManager::init(const YAML::Node& config)
                << RS_REND;
       RS_DEBUG << "------------------------------------------------------" << RS_REND;
       lidar_config[i]["send_point_cloud_ros"] = true;
-      std::shared_ptr<lidar::LidarDriver<PointT>> lidar_driver = std::dynamic_pointer_cast<DriverAdapter>(recv_ptr)->getLidarDriverPtr();
-      AdapterBase::Ptr transmitter_ptr = createTransmitter(lidar_config[i], AdapterType::PointCloudRosAdapter, lidar_driver);
+      lidar_driver_ = std::dynamic_pointer_cast<DriverAdapter>(recv_ptr)->getLidarDriverPtr();
+      AdapterBase::Ptr transmitter_ptr = createTransmitter(lidar_config[i], AdapterType::PointCloudRosAdapter, lidar_driver_);
       point_cloud_transmit_adapter_vec_.emplace_back(transmitter_ptr);
       point_cloud_receive_adapter_vec_[i]->regRecvCallback(
           std::bind(&AdapterBase::sendPointCloud, transmitter_ptr, std::placeholders::_1));
@@ -400,6 +400,18 @@ std::shared_ptr<AdapterBase> AdapterManager::createTransmitter(const YAML::Node&
   }
 
   return transmitter;
+}
+
+void AdapterManager::regExceptionCallback(const std::function<void(const Error&)>& callback)
+{
+  if (lidar_driver_)
+  {
+    lidar_driver_->regExceptionCallback(callback);
+  }
+  else
+  {
+    RS_ERROR << "Failed to create exception callback." << RS_REND;
+  }
 }
 
 }  // namespace lidar

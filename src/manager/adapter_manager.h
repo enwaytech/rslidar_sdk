@@ -90,6 +90,7 @@ public:
   void init(const YAML::Node& config);
   void start();
   void stop();
+  void regExceptionCallback(const std::function<void(const Error&)>& callback);
 
 private:
   std::shared_ptr<AdapterBase> createReceiver(const YAML::Node& config, const AdapterType& adapter_type);
@@ -102,6 +103,7 @@ private:
   std::vector<AdapterBase::Ptr> point_cloud_receive_adapter_vec_;
   std::vector<AdapterBase::Ptr> packet_transmit_adapter_vec_;
   std::vector<AdapterBase::Ptr> point_cloud_transmit_adapter_vec_;
+  std::shared_ptr<lidar::LidarDriver<PointT>> lidar_driver_;
 };
 }  // namespace lidar
 }  // namespace robosense

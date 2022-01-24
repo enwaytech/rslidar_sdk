@@ -41,9 +41,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "dust_filter_robosense/dust_filter.h"
 #include "lidar_self_filter/filter.h"
 #include "lidar_self_filter/self_filter_setup.h"
+#include "rs_driver/driver/decoder/decoder_base.hpp"
 
-constexpr int ECHO_SINGLE = 0;
-constexpr int ECHO_DUAL = 1;
 
 namespace robosense
 {
@@ -103,7 +102,6 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config, const std::shar
   usleep(10000);
   lidar_return_mode_  = -1;
   driver_adapter_ = driver_adapter;
-
   config_ = config;
 
   std::string ros_send_topic;
@@ -157,7 +155,8 @@ inline void PointCloudRosAdapter::initSelfFilter()
 
 inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 {
-  if (lidar_return_mode_ != ECHO_SINGLE && lidar_return_mode_ != ECHO_DUAL)
+  if (lidar_return_mode_ != robosense::lidar::RSEchoMode::ECHO_SINGLE
+  && lidar_return_mode_ != robosense::lidar::RSEchoMode::ECHO_DUAL)
   {
     if (!driver_adapter_->getReturnMode(lidar_return_mode_))
     {
@@ -172,14 +171,12 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
   if (remove_duplicates_)// && lidar_return_mode_ == ECHO_DUAL)
   {
     pcl::PointIndices indices;
-    pcl::PointIndices::Ptr duplicates (new pcl::PointIndices ());
-    //RS_WARNING << "Size before removing duplicates: " << cloud->points.size();
-    // TODO: Get channels per block
+    pcl::PointIndices::Ptr duplicates (new pcl::PointIndices());
+    RS_WARNING << "Size before removing duplicates: " << cloud->points.size() << RS_REND;
 
-    int channels_per_block {0};
-
+    unsigned int channels_per_block {0};
     driver_adapter_->getChannelsPerBlock(channels_per_block);
-    RS_WARNING << "Channels per Block: " << channels_per_block << RS_REND;
+
     unsigned int blks_cloud = cloud->points.size() / channels_per_block;
     for (unsigned int blk_idx = 0; blk_idx < blks_cloud; blk_idx = blk_idx + 2)
     {
@@ -203,7 +200,6 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
     }
 
     pcl::copyPointCloud(*(cloud), indices.indices, *cloud);
-    //RS_WARNING << " after: " << cloud->points.size() << RS_REND;
   }
   if (send_point_cloud_ros_unfiltered_)
   {

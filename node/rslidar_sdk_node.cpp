@@ -35,6 +35,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 using namespace robosense::lidar;
 std::mutex g_mtx;
 std::condition_variable g_cv;
+
 static void sigHandler(int sig)
 {
   RS_MSG << "RoboSense-LiDAR-Driver is stopping....." << RS_REND;
@@ -44,9 +45,25 @@ static void sigHandler(int sig)
   g_cv.notify_all();
 }
 
+#ifdef ROS_FOUND
+void exceptionCallback(const Error& code)
+{
+  ROS_ERROR_STREAM(code.toString());
+}
+#endif
+
 int main(int argc, char** argv)
 {
   signal(SIGINT, sigHandler);  ///< bind ctrl+c signal with the sigHandler function
+
+#ifdef ROS_FOUND  ///< if ROS is found, call the ros::init function
+  ros::init(argc, argv, "rslidar_sdk_node", ros::init_options::NoSigintHandler);
+#endif
+
+#ifdef ROS2_FOUND  ///< if ROS2 is found, call the rclcpp::init function
+  rclcpp::init(argc, argv);
+#endif
+
   RS_TITLE << "********************************************************" << RS_REND;
   RS_TITLE << "**********                                    **********" << RS_REND;
   RS_TITLE << "**********    RSLidar_SDK Version: v" << RSLIDAR_VERSION_MAJOR << "." << RSLIDAR_VERSION_MINOR << "."
@@ -66,15 +83,10 @@ int main(int argc, char** argv)
     return -1;
   }
 
-#ifdef ROS_FOUND  ///< if ROS is found, call the ros::init function
-  ros::init(argc, argv, "rslidar_sdk_node", ros::init_options::NoSigintHandler);
-#endif
-
-#ifdef ROS2_FOUND  ///< if ROS2 is found, call the rclcpp::init function
-  rclcpp::init(argc, argv);
-#endif
-
   demo_ptr->init(config);
+#ifdef ROS_FOUND
+  demo_ptr->regExceptionCallback(exceptionCallback);
+#endif
   demo_ptr->start();
   RS_MSG << "RoboSense-LiDAR-Driver is running....." << RS_REND;
 

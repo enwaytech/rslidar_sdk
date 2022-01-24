@@ -23,7 +23,8 @@ lidar:
       min_distance: 0.2            #Minimum distance of point cloud
       max_distance: 200            #Maximum distance of point cloud
       use_lidar_clock: false       #True--Use the lidar clock as the message timestamp
-                                   #False-- Use the system clock as the timestamp  
+                                   #False-- Use the system clock as the timestamp
+      dual_return_downsample_ratio: 3 # Downsample the dual return point cloud to 1/n of the original size (options: 1, 2, 3, 6) for RSBP only
     ros:
       ros_recv_packet_topic: /sensors/lidar/lidar_front_left/rslidar_packets          #Topic used to receive lidar packets from ROS
       ros_send_packet_topic: /rslidar_packets          #Topic used to send lidar packets through ROS
