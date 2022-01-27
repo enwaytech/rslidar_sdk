@@ -168,11 +168,10 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
   cloud->header = msg.point_cloud_ptr->header;
   pcl::copyPointCloud(*(msg.point_cloud_ptr), *cloud);
 
-  if (remove_duplicates_)// && lidar_return_mode_ == ECHO_DUAL)
+  if (remove_duplicates_ && lidar_return_mode_ == ECHO_DUAL)
   {
     pcl::PointIndices indices;
     pcl::PointIndices::Ptr duplicates (new pcl::PointIndices());
-    RS_WARNING << "Size before removing duplicates: " << cloud->points.size() << RS_REND;
 
     unsigned int channels_per_block {0};
     driver_adapter_->getChannelsPerBlock(channels_per_block);
@@ -220,7 +219,6 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
     // Initialize self-filter settings here the first time with serial number
 #ifdef POINT_TYPE_XYZRPYINR
     pcl::PointIndices indices;
-    //RS_WARNING << "Size before self-filtering: " << cloud->points.size();
     for (size_t idx = 0; idx < cloud->points.size(); ++idx)
     {
       const PointT& point {cloud->points[idx]};
@@ -244,7 +242,6 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
       }
     }
     pcl::copyPointCloud(*cloud, indices.indices, *cloud);
-    //RS_WARNING << " after: " << cloud->points.size() << RS_REND;
 #else
     RS_WARNING << "Self filter only works with POINT_TYPE_XYZRPYINR" << RS_REND;
     exit(1);
@@ -262,14 +259,12 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
 
   if (dust_filter_enabled_)
   {
-    //RS_WARNING << "Size before dust-filtering: " << cloud->points.size();
     dust_filter_.startNewPointCloud(cloud->header, cloud->size());
     for (const auto p : *cloud)
     {
       dust_filter_.addMeasurement(p);
     }
     *cloud = dust_filter_.getFilteredPointCloud();
-    //RS_WARNING << " after: " << cloud->points.size() << RS_REND;
   }
 
   if (self_filter_setup_enabled_)
@@ -308,7 +303,7 @@ PointCloudRosAdapter::makeSelfFilterSettings(const YAML::Node& config) const
   std::string serial_number;
   if (driver_adapter_->getSerialNumber(serial_number))
   {
-    settings.serial = frame_id;//serial_number;
+    settings.serial = serial_number;
   }
   else
   {
