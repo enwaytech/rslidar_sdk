@@ -93,9 +93,9 @@ robosense::lidar::SelfFilterSetup::inBufferedFootprint(const PointT& point)
     return false;
   }
 
-  const double max_x = robot_params_.baseLinkFrontOffset() + k_footprint_buffer_width_;
-  const double min_x = robot_params_.baseLinkBackOffset() - k_footprint_buffer_width_;
-  const double max_y = (robot_params_.footprintWidth() * 0.5) + k_footprint_buffer_width_;
+  const double max_x = robot_params_.selfFilterCalibrationBaseLinkFrontOffset() + k_footprint_buffer_width_;
+  const double min_x = robot_params_.selfFilterCalibrationBaseLinkBackOffset() - k_footprint_buffer_width_;
+  const double max_y = (robot_params_.selfFilterCalibrationFootprintWidth() * 0.5) + k_footprint_buffer_width_;
 
   const geometry_msgs::Point base_link_point = transformed_point.point;
 
