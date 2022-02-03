@@ -86,7 +86,7 @@ private:
   tf2_ros::TransformListener transform_listener_{transform_buffer_};
 
   bool dust_filter_enabled_;
-  dust_filter_robosense::DustFilter<PointT> dust_filter_;
+  std::optional<dust_filter_robosense::DustFilter<PointT>> dust_filter_;
   std::shared_ptr<lidar::LidarDriver<PointT>> driver_adapter_;
   YAML::Node config_;
   int lidar_return_mode_;
@@ -131,9 +131,23 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config, const std::shar
   yamlRead<bool>(config["ros"], "remove_duplicates", remove_duplicates_, false);
   yamlRead<std::string>(config["driver"], "frame_id", frame_id_, "rslidar");
 
-  yamlRead<bool>(config["self_filter"], "self_filter_setup", self_filter_setup_enabled_, false);
-  yamlRead<bool>(config["self_filter"], "self_filter_enabled", self_filter_enabled_, false);
   yamlRead<bool>(config["ros"], "dust_filter_enabled", dust_filter_enabled_, false);
+
+  if (config["self_filter"])
+  {
+    yamlRead<bool>(config["self_filter"], "self_filter_setup", self_filter_setup_enabled_, false);
+    yamlRead<bool>(config["self_filter"], "self_filter_enabled", self_filter_enabled_, false);
+  }
+  else
+  {
+    self_filter_setup_enabled_ = false;
+    self_filter_enabled_ = false;
+  }
+
+  if (dust_filter_enabled_)
+  {
+    dust_filter_.emplace();
+  }
 }
 
 inline void PointCloudRosAdapter::initSelfFilterSetup()
@@ -257,14 +271,14 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
     point_cloud_pub_self_filtered_.publish(toRosMsg(self_filtered_msg));
   }
 
-  if (dust_filter_enabled_)
+  if (dust_filter_enabled_ && dust_filter_)
   {
-    dust_filter_.startNewPointCloud(cloud->header, cloud->size());
+    dust_filter_->startNewPointCloud(cloud->header, cloud->size());
     for (const auto p : *cloud)
     {
-      dust_filter_.addMeasurement(p);
+      dust_filter_->addMeasurement(p);
     }
-    *cloud = dust_filter_.getFilteredPointCloud();
+    *cloud = dust_filter_->getFilteredPointCloud();
   }
 
   if (self_filter_setup_enabled_)
