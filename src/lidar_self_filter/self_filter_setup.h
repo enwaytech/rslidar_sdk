@@ -42,7 +42,8 @@ namespace robosense
     private:
       [[nodiscard]] bool inBufferedFootprint(const PointT& laser_return);
 
-      constexpr static double k_footprint_buffer_width_ = 0.15;
+      constexpr static double k_footprint_buffer_x_width_ = 0.035;
+      constexpr static double k_footprint_buffer_y_width_ = 0.075;
       constexpr static double k_min_z_ = 0.05;
 
       const safety_utils::UtilsParams robot_params_;
