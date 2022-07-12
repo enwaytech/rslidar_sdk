@@ -42,7 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "lidar_self_filter/filter.h"
 #include "lidar_self_filter/self_filter_setup.h"
 #include "rs_driver/driver/decoder/decoder_base.hpp"
-
+#include "visualization_msgs/Marker.h"
 
 namespace robosense
 {
@@ -81,6 +81,7 @@ private:
   
   bool self_filter_enabled_;
   std::optional<lidar_self_filter::Filter> self_filter_;
+  ros::Publisher self_filter_markers_;
 
   tf2_ros::Buffer transform_buffer_;
   tf2_ros::TransformListener transform_listener_{transform_buffer_};
@@ -144,6 +145,10 @@ inline void PointCloudRosAdapter::init(const YAML::Node& config, const std::shar
     self_filter_enabled_ = false;
   }
 
+  if (self_filter_enabled_)
+  {
+    self_filter_markers_ = nh_->advertise<visualization_msgs::Marker>(ros_send_topic + "_self_filter_markers", 1);
+  }
   if (dust_filter_enabled_)
   {
     dust_filter_.emplace();
@@ -256,6 +261,8 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
       }
     }
     pcl::copyPointCloud(*cloud, indices.indices, *cloud);
+    self_filter_markers_.publish(self_filter_->getSelfFilterMarkers());
+
 #else
     RS_WARNING << "Self filter only works with POINT_TYPE_XYZRPYINR" << RS_REND;
     exit(1);
@@ -304,6 +311,7 @@ inline void PointCloudRosAdapter::sendPointCloud(const LidarPointCloudMsg& msg)
     filtered_msg.frame_id = msg.frame_id;
     point_cloud_pub_.publish(toRosMsg(filtered_msg));
   }
+
 }
 
 inline lidar_self_filter::LidarSettings

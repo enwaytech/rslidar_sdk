@@ -56,6 +56,7 @@ namespace robosense
       tf2_ros::TransformListener transform_listener_;
 
       ros::Publisher pub_;
+      ros::Publisher pub_self_filter_markers_;
       visualization_msgs::Marker visualization_points_;
     };
 

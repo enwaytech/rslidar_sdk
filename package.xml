@@ -19,6 +19,7 @@
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
   <depend>dust_filter_robosense</depend>
+  <depend>visualization_msgs</depend>
   <export>
     <nodelet plugin="${prefix}/nodelets.xml"/>
   </export>

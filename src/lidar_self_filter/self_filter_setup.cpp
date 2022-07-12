@@ -36,6 +36,7 @@ robosense::lidar::SelfFilterSetup::SelfFilterSetup(ros::NodeHandle& node_handle,
   visualization_points_.scale.y = point_marker_size;
 
   pub_ = node_handle.advertise<visualization_msgs::Marker>("points_transformed", 1);
+  pub_self_filter_markers_ = node_handle.advertise<visualization_msgs::Marker>("self_filter_markers", 1);
 }
 
 void
@@ -66,6 +67,11 @@ robosense::lidar::SelfFilterSetup::filter(const LidarPointCloudMsg& msg)
   {
     visualization_points_.header.stamp = ros::Time::now();
     pub_.publish(visualization_points_);
+  }
+
+  if (pub_self_filter_markers_.getNumSubscribers() > 0)
+  {
+    pub_self_filter_markers_.publish(lidar_self_filter_.getIntermediateFilterMarkers());
   }
 }
 
